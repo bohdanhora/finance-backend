@@ -16,16 +16,16 @@ import config from './config/config';
         }),
         JwtModule.registerAsync({
             imports: [ConfigModule],
-            useFactory: async (config) => ({
-                secret: config.get('jwt.secret'),
+            useFactory: (config: ConfigService) => ({
+                secret: config.get<string>('jwt.secret'),
             }),
             global: true,
             inject: [ConfigService],
         }),
         MongooseModule.forRootAsync({
             imports: [ConfigModule],
-            useFactory: async (config) => ({
-                uri: config.get('database.connectionString'),
+            useFactory: (config: ConfigService) => ({
+                uri: config.get<string>('database.connectionString'),
             }),
             inject: [ConfigService],
         }),

@@ -57,28 +57,31 @@ export class AuthService {
             throw new UnauthorizedException('Wrong Credentials');
         }
 
-        return this.generateUserTokens(user._id);
+        return this.generateUserTokens(user._id.toString());
     }
 
     async refreshTokens(refreshToken) {
-        const token = await this.RefreshTokenModel.findOne({
-            token: refreshToken,
-            expiryDate: { $gte: new Date() },
-        });
+        const token: RefreshToken | null = await this.RefreshTokenModel.findOne(
+            {
+                token: refreshToken,
+                expiryDate: { $gte: new Date() },
+            },
+        );
 
         if (!token) {
             throw new UnauthorizedException();
         }
 
-        return this.generateUserTokens(token.userId);
+        return this.generateUserTokens(token.userId.toString());
     }
 
-    async generateUserTokens(userId) {
+    async generateUserTokens(
+        userId: string,
+    ): Promise<{ accessToken: string; refreshToken: string }> {
         const accessToken = this.jwtService.sign(
             { userId },
             { expiresIn: '1h' },
         );
-
         const refreshToken = uuidv4();
 
         await this.storeRefreshToken(refreshToken, userId);

@@ -9,6 +9,10 @@ import { JwtService } from '@nestjs/jwt';
 import { Request } from 'express';
 import { Observable } from 'rxjs';
 
+interface AuthenticatedRequest extends Request {
+    userId?: string;
+}
+
 @Injectable()
 export class AuthGuard implements CanActivate {
     constructor(private jwtService: JwtService) {}
@@ -16,7 +20,9 @@ export class AuthGuard implements CanActivate {
     canActivate(
         context: ExecutionContext,
     ): boolean | Promise<boolean> | Observable<boolean> {
-        const request = context.switchToHttp().getRequest();
+        const request = context
+            .switchToHttp()
+            .getRequest<AuthenticatedRequest>();
         const token = this.extractTokenFromHeader(request);
 
         if (!token) {
@@ -24,12 +30,17 @@ export class AuthGuard implements CanActivate {
         }
 
         try {
-            const payload = this.jwtService.verify(token);
+            const payload = this.jwtService.verify<{ userId: string }>(token);
             request.userId = payload.userId;
-        } catch (error) {
-            Logger.error(error.message);
+        } catch (error: unknown) {
+            if (error instanceof Error) {
+                Logger.error(error.message);
+            } else {
+                Logger.error('Unknown error during token verification');
+            }
             throw new UnauthorizedException('Invalid Token');
         }
+
         return true;
     }
 
