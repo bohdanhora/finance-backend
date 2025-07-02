@@ -22,4 +22,10 @@ export class AuthController {
     async refreshTokens(@Body() refreshTokenData: RefreshTokenDto) {
         return this.authService.refreshTokens(refreshTokenData.refreshToken);
     }
+
+    //TODO: change password
+
+    //TODO: forgot password
+
+    //TODO: reset password
 }
