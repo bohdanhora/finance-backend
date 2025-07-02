@@ -11,6 +11,16 @@ async function bootstrap() {
             forbidNonWhitelisted: true,
         }),
     );
+
+    app.enableCors({
+        origin: [
+            'https://finance-front-zeta.vercel.app',
+            'http://localhost:3000',
+        ],
+        methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
+        credentials: true,
+    });
+
     await app.listen(process.env.PORT ?? 8000);
 }
 bootstrap().catch((err) => {
