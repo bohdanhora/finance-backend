@@ -1,6 +1,8 @@
 import {
     BadRequestException,
     Injectable,
+    InternalServerErrorException,
+    NotFoundException,
     UnauthorizedException,
 } from '@nestjs/common';
 import { RegistrationDto } from './dtos/registration.dto';
@@ -12,6 +14,9 @@ import { LoginDto } from './dtos/login.dto';
 import { JwtService } from '@nestjs/jwt';
 import { RefreshToken } from './schemas/refresh-token.schema';
 import { v4 as uuidv4 } from 'uuid';
+import { nanoid } from 'nanoid';
+import { ResetToken } from './schemas/reset-token.schema';
+import { MailService } from 'src/services/mail.service';
 
 @Injectable()
 export class AuthService {
@@ -19,7 +24,10 @@ export class AuthService {
         @InjectModel(User.name) private UserModel: Model<User>,
         @InjectModel(RefreshToken.name)
         private RefreshTokenModel: Model<RefreshToken>,
+        @InjectModel(ResetToken.name)
+        private ResetTokenModel: Model<ResetToken>,
         private jwtService: JwtService,
+        private mailService: MailService,
     ) {}
 
     async registration(registrationData: RegistrationDto) {
@@ -60,7 +68,7 @@ export class AuthService {
         return this.generateUserTokens(user._id.toString());
     }
 
-    async refreshTokens(refreshToken) {
+    async refreshTokens(refreshToken: string) {
         const token: RefreshToken | null = await this.RefreshTokenModel.findOne(
             {
                 token: refreshToken,
@@ -91,7 +99,7 @@ export class AuthService {
         };
     }
 
-    async storeRefreshToken(token: string, userId) {
+    async storeRefreshToken(token: string, userId: string) {
         const expiryDate = new Date();
         expiryDate.setDate(expiryDate.getDate() + 3);
 
@@ -100,5 +108,72 @@ export class AuthService {
             { $set: { expiryDate, token } },
             { upsert: true },
         );
+    }
+
+    async changePassword(
+        userId: string,
+        {
+            oldPassword,
+            newPassword,
+        }: { oldPassword: string; newPassword: string },
+    ) {
+        const user = await this.UserModel.findById(userId);
+        if (!user) {
+            throw new NotFoundException('User not found');
+        }
+
+        const isCompare = await bcrypt.compare(oldPassword, user.password);
+        if (!isCompare) {
+            throw new UnauthorizedException('Wrong credentials');
+        }
+
+        const newHashedPassword = await bcrypt.hash(newPassword, 10);
+        user.password = newHashedPassword;
+
+        await user.save();
+    }
+
+    async forgotPassword({ email }: { email: string }) {
+        const user = await this.UserModel.findOne({ email });
+        if (user) {
+            const expiryDate = new Date();
+            expiryDate.setDate(expiryDate.getDate() + 1);
+
+            const resetToken = nanoid(64);
+            await this.ResetTokenModel.create({
+                token: resetToken,
+                userId: user._id,
+                expiryDate,
+            });
+
+            await this.mailService.sendPasswordResetEmail(email, resetToken);
+        }
+
+        return { message: 'If user exists, they will receive an email' };
+    }
+
+    async resetPassword({
+        resetToken,
+        newPassword,
+    }: {
+        resetToken: string;
+        newPassword: string;
+    }) {
+        const token = await this.ResetTokenModel.findOneAndDelete({
+            token: resetToken,
+            expiryDate: { $gte: new Date() },
+        });
+
+        if (!token) {
+            throw new UnauthorizedException('Invalid link');
+        }
+
+        const user = await this.UserModel.findById(token.userId);
+        if (!user) {
+            throw new InternalServerErrorException();
+        }
+
+        user.password = await bcrypt.hash(newPassword, 10);
+        await user.save();
     }
 }
