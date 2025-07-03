@@ -14,7 +14,6 @@ import { LoginDto } from './dtos/login.dto';
 import { JwtService } from '@nestjs/jwt';
 import { RefreshToken } from './schemas/refresh-token.schema';
 import { v4 as uuidv4 } from 'uuid';
-import { nanoid } from 'nanoid';
 import { ResetToken } from './schemas/reset-token.schema';
 import { MailService } from 'src/services/mail.service';
 
@@ -139,7 +138,7 @@ export class AuthService {
             const expiryDate = new Date();
             expiryDate.setDate(expiryDate.getDate() + 1);
 
-            const resetToken = nanoid(64);
+            const resetToken = uuidv4();
             await this.ResetTokenModel.create({
                 token: resetToken,
                 userId: user._id,
