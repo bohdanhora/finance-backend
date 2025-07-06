@@ -7,6 +7,7 @@ import { ResetPasswordDto } from './dtos/reset-password.dto';
 import { ForgotPasswordDto } from './dtos/forgot-password.dto';
 import { ChangePasswordDto } from './dtos/change-password.dto';
 import { AuthGuard } from 'src/guards/auth.guard';
+import { LogoutDto } from './dtos/logout.dto';
 
 interface RequestWithUserId extends Request {
     userId: string;
@@ -48,5 +49,10 @@ export class AuthController {
     @Put('reset-password')
     async resetPassword(@Body() resetPasswordData: ResetPasswordDto) {
         return this.authService.resetPassword(resetPasswordData);
+    }
+
+    @Post('logout')
+    async logout(@Body() logoutData: LogoutDto) {
+        return this.authService.logout(logoutData);
     }
 }
