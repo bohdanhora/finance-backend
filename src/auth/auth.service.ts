@@ -16,6 +16,7 @@ import { RefreshToken } from './schemas/refresh-token.schema';
 import { v4 as uuidv4 } from 'uuid';
 import { ResetToken } from './schemas/reset-token.schema';
 import { MailService } from 'src/services/mail.service';
+import { LogoutDto } from './dtos/logout.dto';
 
 @Injectable()
 export class AuthService {
@@ -88,7 +89,7 @@ export class AuthService {
 
     async generateUserTokens(
         userId: string,
-    ): Promise<{ accessToken: string; refreshToken: string }> {
+    ): Promise<{ accessToken: string; refreshToken: string; userId: string }> {
         const accessToken = this.jwtService.sign(
             { userId },
             { expiresIn: '1h' },
@@ -99,6 +100,7 @@ export class AuthService {
         return {
             accessToken,
             refreshToken,
+            userId,
         };
     }
 
@@ -178,5 +180,19 @@ export class AuthService {
 
         user.password = await bcrypt.hash(newPassword, 10);
         await user.save();
+    }
+
+    async logout({ userId }: LogoutDto) {
+        const user = await this.UserModel.findById(userId);
+
+        if (!user) {
+            throw new UnauthorizedException('User not found!');
+        }
+
+        await this.RefreshTokenModel.findOneAndDelete({ userId });
+
+        return {
+            message: 'Success logout',
+        };
     }
 }
