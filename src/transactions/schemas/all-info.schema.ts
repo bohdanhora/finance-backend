@@ -23,3 +23,6 @@ export type AllTransactionsInfoDocument = HydratedDocument<AllTransactionsInfo>;
 
 export const AllTransactionsInfoSchema =
     SchemaFactory.createForClass(AllTransactionsInfo);
+
+AllTransactionsInfoSchema.set('toJSON', { versionKey: false });
+AllTransactionsInfoSchema.set('toObject', { versionKey: false });

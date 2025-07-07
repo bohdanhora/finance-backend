@@ -16,3 +16,6 @@ export class User {
 export type UserDocument = HydratedDocument<User>;
 
 export const UserSchema = SchemaFactory.createForClass(User);
+
+UserSchema.set('toJSON', { versionKey: false });
+UserSchema.set('toObject', { versionKey: false });

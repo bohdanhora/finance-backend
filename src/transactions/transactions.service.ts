@@ -35,10 +35,7 @@ export class TransactionsService {
             throw new BadRequestException('No transactions...');
         }
 
-        return {
-            userId: req.userId,
-            transactions: transactions,
-        };
+        return transactions;
     }
 
     async setTotalAmount(
