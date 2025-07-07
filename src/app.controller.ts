@@ -3,7 +3,7 @@ import { Request } from 'express';
 import { AppService } from './app.service';
 import { AuthGuard } from './guards/auth.guard';
 
-interface AuthenticatedRequest extends Request {
+export interface AuthenticatedRequest extends Request {
     userId: string;
 }
 

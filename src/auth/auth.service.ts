@@ -17,11 +17,14 @@ import { v4 as uuidv4 } from 'uuid';
 import { ResetToken } from './schemas/reset-token.schema';
 import { MailService } from 'src/services/mail.service';
 import { LogoutDto } from './dtos/logout.dto';
+import { AllTransactionsInfo } from 'src/transactions/schemas/all-info.schema';
 
 @Injectable()
 export class AuthService {
     constructor(
         @InjectModel(User.name) private UserModel: Model<User>,
+        @InjectModel(AllTransactionsInfo.name)
+        private AllTransactionsInfoModel: Model<AllTransactionsInfo>,
         @InjectModel(RefreshToken.name)
         private RefreshTokenModel: Model<RefreshToken>,
         @InjectModel(ResetToken.name)
@@ -43,10 +46,20 @@ export class AuthService {
 
         const hashedPassword = await bcrypt.hash(password, 10);
 
-        await this.UserModel.create({
+        const newUser = await this.UserModel.create({
             name,
             email,
             password: hashedPassword,
+        });
+
+        await this.AllTransactionsInfoModel.create({
+            userId: newUser._id,
+            totalAmount: 0,
+            nextMonthTotalAmount: 0,
+            defaultEssentialsArray: [],
+            essentialsArray: [],
+            nextMonthEssentialsArray: [],
+            transactions: [],
         });
 
         return {
