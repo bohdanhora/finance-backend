@@ -20,7 +20,7 @@ export class TransactionsController {
     ) {
         return this.transactionsService.setTotalAmount(totalAmountData, req);
     }
-    @Post('set-total-next-month')
+    @Post('set-next-month-total')
     async setNextMonthTotalAmount(
         @Body() nextMonthTotalAmountData: NextMonthTotalAmountDto,
         @Req() req: AuthenticatedRequest,
