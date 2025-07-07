@@ -9,6 +9,10 @@ import {
 } from './schemas/refresh-token.schema';
 import { ResetToken, ResetTokenSchema } from './schemas/reset-token.schema';
 import { MailService } from 'src/services/mail.service';
+import {
+    AllTransactionsInfo,
+    AllTransactionsInfoSchema,
+} from 'src/transactions/schemas/all-info.schema';
 
 @Module({
     imports: [
@@ -24,6 +28,10 @@ import { MailService } from 'src/services/mail.service';
             {
                 name: ResetToken.name,
                 schema: ResetTokenSchema,
+            },
+            {
+                name: AllTransactionsInfo.name,
+                schema: AllTransactionsInfoSchema,
             },
         ]),
     ],
