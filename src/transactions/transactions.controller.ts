@@ -13,6 +13,7 @@ import { AuthGuard } from 'src/guards/auth.guard';
 import { TotalAmountDto } from './dtos/total-amount.dto';
 import { NextMonthTotalAmountDto } from './dtos/next-month-total-amount.dto';
 import { EssentialsArrayDto } from './dtos/essential-payments.dto';
+import { TransactionDto } from './dtos/transaction.dto';
 
 @UseGuards(AuthGuard)
 @Controller('transactions')
@@ -21,6 +22,13 @@ export class TransactionsController {
     @Get('all-info')
     async getAllInfo(@Req() req: AuthenticatedRequest) {
         return this.transactionsService.getAllInfo(req);
+    }
+    @Post('new-transaction')
+    async newTransaction(
+        @Body() newTransactionData: TransactionDto,
+        @Req() req: AuthenticatedRequest,
+    ) {
+        return this.transactionsService.newTransaction(newTransactionData, req);
     }
     @Post('set-total')
     async setTotalAmount(

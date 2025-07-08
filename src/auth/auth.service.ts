@@ -55,7 +55,10 @@ export class AuthService {
         await this.AllTransactionsInfoModel.create({
             userId: newUser._id,
             totalAmount: 0,
+            totalIncome: 0,
+            totalSpend: 0,
             nextMonthTotalAmount: 0,
+
             defaultEssentialsArray: [],
             essentialsArray: [],
             nextMonthEssentialsArray: [],

@@ -14,6 +14,8 @@ import {
     EssentialsArrayDto,
     EssentialsType,
 } from './dtos/essential-payments.dto';
+import { TransactionDto } from './dtos/transaction.dto';
+import { CalculationService } from './helpers/calculation.service';
 
 @Injectable()
 export class TransactionsService {
@@ -21,6 +23,7 @@ export class TransactionsService {
         @InjectModel(User.name) private UserModel: Model<User>,
         @InjectModel(AllTransactionsInfo.name)
         private AllTransactionsInfoModel: Model<AllTransactionsInfo>,
+        private readonly calculationService: CalculationService,
     ) {}
 
     async getAllInfo(req: AuthenticatedRequest) {
@@ -40,6 +43,44 @@ export class TransactionsService {
         }
 
         return transactions;
+    }
+
+    async newTransaction(
+        transaction: TransactionDto,
+        req: AuthenticatedRequest,
+    ) {
+        const userId = req.userId;
+
+        if (!userId) {
+            throw new UnauthorizedException('User id dont found');
+        }
+
+        const userTransactionsInfo =
+            await this.AllTransactionsInfoModel.findOne({ userId });
+
+        if (!userTransactionsInfo) {
+            throw new UnauthorizedException('User transactions info not found');
+        }
+
+        const updatedTotals = this.calculationService.calculateAllTotals(
+            userTransactionsInfo.totalAmount,
+            userTransactionsInfo.totalIncome,
+            userTransactionsInfo.totalSpend,
+            transaction.value,
+            transaction.transactionType,
+        );
+
+        userTransactionsInfo.transactions.unshift(transaction);
+        userTransactionsInfo.totalAmount = updatedTotals.totalAmount;
+        userTransactionsInfo.totalIncome = updatedTotals.totalIncome;
+        userTransactionsInfo.totalSpend = updatedTotals.totalSpend;
+
+        await userTransactionsInfo.save();
+
+        return {
+            message: 'Transaction added successfully',
+            updatedTotals,
+        };
     }
 
     async setTotalAmount(
