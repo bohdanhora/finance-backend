@@ -7,6 +7,7 @@ import {
     AllTransactionsInfo,
     AllTransactionsInfoSchema,
 } from './schemas/all-info.schema';
+import { CalculationService } from './helpers/calculation.service';
 
 @Module({
     imports: [
@@ -22,6 +23,6 @@ import {
         ]),
     ],
     controllers: [TransactionsController],
-    providers: [TransactionsService],
+    providers: [TransactionsService, CalculationService],
 })
 export class TransactionsModule {}
