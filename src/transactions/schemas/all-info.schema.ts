@@ -1,5 +1,6 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { HydratedDocument } from 'mongoose';
+import { EssentialItemDto } from '../dtos/essential-payments.dto';
 
 @Schema()
 export class AllTransactionsInfo {
@@ -10,11 +11,11 @@ export class AllTransactionsInfo {
     @Prop({ required: true })
     nextMonthTotalAmount: number;
     @Prop({ required: true })
-    defaultEssentialsArray: string[] | [];
+    defaultEssentialsArray: EssentialItemDto[] | [];
     @Prop({ required: true })
-    essentialsArray: string[] | [];
+    essentialsArray: EssentialItemDto[] | [];
     @Prop({ required: true })
-    nextMonthEssentialsArray: string[] | [];
+    nextMonthEssentialsArray: EssentialItemDto[] | [];
     @Prop({ required: true })
     transactions: string[] | [];
 }

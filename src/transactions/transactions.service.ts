@@ -10,6 +10,10 @@ import { User } from 'src/auth/schemas/user.schema';
 import { AllTransactionsInfo } from './schemas/all-info.schema';
 import { TotalAmountDto } from './dtos/total-amount.dto';
 import { NextMonthTotalAmountDto } from './dtos/next-month-total-amount.dto';
+import {
+    EssentialsArrayDto,
+    EssentialsType,
+} from './dtos/essential-payments.dto';
 
 @Injectable()
 export class TransactionsService {
@@ -79,6 +83,43 @@ export class TransactionsService {
         return {
             message: 'Amount updated',
             nextMonthTotalAmount: nextMonthTotalAmount,
+        };
+    }
+    async setEssentalPayments(
+        { type, items }: EssentialsArrayDto,
+        req: AuthenticatedRequest,
+    ) {
+        const userId = req.userId;
+
+        if (!userId) {
+            throw new UnauthorizedException('User id not found');
+        }
+
+        let updateFieldName: string;
+
+        switch (type) {
+            case EssentialsType.DEFAULT:
+                updateFieldName = 'defaultEssentialsArray';
+                break;
+            case EssentialsType.THIS_MONTH:
+                updateFieldName = 'essentialsArray';
+                break;
+            case EssentialsType.NEXT_MONTH:
+                updateFieldName = 'nextMonthEssentialsArray';
+                break;
+            default:
+                throw new BadRequestException('Invalid type');
+        }
+
+        await this.AllTransactionsInfoModel.updateOne(
+            { userId },
+            { $set: { [updateFieldName]: items } },
+            { upsert: true, new: true },
+        );
+
+        return {
+            message: 'Essentials updated',
+            [updateFieldName]: items,
         };
     }
 }
