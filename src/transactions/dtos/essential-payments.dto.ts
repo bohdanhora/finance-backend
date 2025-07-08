@@ -35,5 +35,5 @@ export class EssentialsArrayDto {
     @IsArray()
     @ValidateNested({ each: true })
     @Type(() => EssentialItemDto)
-    items: EssentialItemDto[];
+    items: EssentialItemDto[] | [];
 }
