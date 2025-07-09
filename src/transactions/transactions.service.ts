@@ -106,6 +106,7 @@ export class TransactionsService {
         return {
             message: 'Transaction added successfully',
             updatedTotals,
+            updatedItems: userTransactionsInfo.transactions,
         };
     }
 
@@ -170,8 +171,8 @@ export class TransactionsService {
     ) {
         const userId = this.getUserIdOrThrow(req);
         const updateFieldName = this.getUpdateFieldName(type);
-
         const userData = await this.getUserDataOrThrow(userId);
+
         const currentItems =
             (userData[updateFieldName] as EssentialItemDto[]) || [];
 
