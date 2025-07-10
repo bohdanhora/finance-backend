@@ -196,6 +196,10 @@ export class AuthService {
 
         user.password = await bcrypt.hash(newPassword, 10);
         await user.save();
+
+        return {
+            message: 'Success reset',
+        };
     }
 
     async logout({ userId }: LogoutDto) {
