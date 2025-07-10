@@ -161,6 +161,9 @@ export class AuthService {
             expiryDate.setDate(expiryDate.getDate() + 1);
 
             const resetToken = uuidv4();
+
+            await this.ResetTokenModel.deleteMany({ userId: user._id });
+
             await this.ResetTokenModel.create({
                 token: resetToken,
                 userId: user._id,
