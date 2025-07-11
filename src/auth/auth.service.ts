@@ -7,7 +7,7 @@ import {
 } from '@nestjs/common';
 import { RegistrationDto } from './dtos/registration.dto';
 import { InjectModel } from '@nestjs/mongoose';
-import { User } from './schemas/user.schema';
+import { User, UserDocument } from './schemas/user.schema';
 import { Model } from 'mongoose';
 import * as bcrypt from 'bcrypt';
 import { LoginDto } from './dtos/login.dto';
@@ -79,6 +79,10 @@ export class AuthService {
             throw new UnauthorizedException('Wrong Credentials');
         }
 
+        if (!user.password) {
+            throw new UnauthorizedException('Password missing');
+        }
+
         const passwordMatch = await bcrypt.compare(password, user.password);
 
         if (!passwordMatch) {
@@ -104,8 +108,10 @@ export class AuthService {
     }
 
     async generateUserTokens(
-        userId: string,
+        userOrId: string | UserDocument,
     ): Promise<{ accessToken: string; refreshToken: string; userId: string }> {
+        const userId =
+            typeof userOrId === 'string' ? userOrId : userOrId._id.toString();
         const accessToken = this.jwtService.sign(
             { userId },
             { expiresIn: '1h' },
@@ -113,6 +119,7 @@ export class AuthService {
         const refreshToken = uuidv4();
 
         await this.storeRefreshToken(refreshToken, userId);
+
         return {
             accessToken,
             refreshToken,
@@ -143,6 +150,9 @@ export class AuthService {
             throw new NotFoundException('User not found');
         }
 
+        if (!user.password) {
+            throw new UnauthorizedException('Password missing');
+        }
         const isCompare = await bcrypt.compare(oldPassword, user.password);
         if (!isCompare) {
             throw new UnauthorizedException('Wrong credentials');
@@ -217,5 +227,39 @@ export class AuthService {
         return {
             message: 'Success logout',
         };
+    }
+
+    async validateOAuthLogin(profile: {
+        email: string;
+        name: string;
+        picture: string;
+    }): Promise<User> {
+        const { email, name, picture } = profile;
+
+        let user = await this.UserModel.findOne({ email });
+
+        if (!user) {
+            user = await this.UserModel.create({
+                name,
+                email,
+                avatar: picture,
+                registeredVia: 'google',
+                password: null,
+            });
+
+            await this.AllTransactionsInfoModel.create({
+                userId: user._id,
+                totalAmount: 0,
+                totalIncome: 0,
+                totalSpend: 0,
+                nextMonthTotalAmount: 0,
+                defaultEssentialsArray: [],
+                essentialsArray: [],
+                nextMonthEssentialsArray: [],
+                transactions: [],
+            });
+        }
+
+        return user;
     }
 }
