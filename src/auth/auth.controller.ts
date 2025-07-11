@@ -5,6 +5,7 @@ import {
     Post,
     Put,
     Req,
+    Res,
     UseGuards,
 } from '@nestjs/common';
 import { AuthService } from './auth.service';
@@ -18,6 +19,7 @@ import { AuthGuard } from 'src/guards/auth.guard';
 import { LogoutDto } from './dtos/logout.dto';
 import { GoogleAuthGuard } from 'src/guards/google-auth.guard';
 import { UserDocument } from './schemas/user.schema';
+import { Response } from 'express';
 
 interface RequestWithUserId extends Request {
     userId: string;
@@ -76,12 +78,23 @@ export class AuthController {
 
     @Get('google/redirect')
     @UseGuards(GoogleAuthGuard)
-    async googleRedirect(@Req() req: RequestWithUser) {
+    async googleRedirect(@Req() req: RequestWithUser, @Res() res: Response) {
         const tokens = await this.authService.generateUserTokens(req.user);
-        return {
-            message: 'Login via Google successful',
-            user: req.user,
-            ...tokens,
-        };
+
+        res.cookie('accessToken', tokens.accessToken, {
+            httpOnly: true,
+            secure: true,
+            sameSite: 'lax',
+            maxAge: 1000 * 60 * 15,
+        });
+
+        res.cookie('refreshToken', tokens.refreshToken, {
+            httpOnly: true,
+            secure: true,
+            sameSite: 'lax',
+            maxAge: 1000 * 60 * 60 * 24 * 7,
+        });
+
+        return res.redirect('https://finance-front-zeta.vercel.app/login');
     }
 }
