@@ -1,4 +1,12 @@
-import { Body, Controller, Post, Put, Req, UseGuards } from '@nestjs/common';
+import {
+    Body,
+    Controller,
+    Get,
+    Post,
+    Put,
+    Req,
+    UseGuards,
+} from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { RegistrationDto } from './dtos/registration.dto';
 import { LoginDto } from './dtos/login.dto';
@@ -8,9 +16,15 @@ import { ForgotPasswordDto } from './dtos/forgot-password.dto';
 import { ChangePasswordDto } from './dtos/change-password.dto';
 import { AuthGuard } from 'src/guards/auth.guard';
 import { LogoutDto } from './dtos/logout.dto';
+import { GoogleAuthGuard } from 'src/guards/google-auth.guard';
+import { UserDocument } from './schemas/user.schema';
 
 interface RequestWithUserId extends Request {
     userId: string;
+}
+
+interface RequestWithUser extends Request {
+    user: UserDocument;
 }
 
 @Controller('auth')
@@ -54,5 +68,20 @@ export class AuthController {
     @Post('logout')
     async logout(@Body() logoutData: LogoutDto) {
         return this.authService.logout(logoutData);
+    }
+
+    @Get('google')
+    @UseGuards(GoogleAuthGuard)
+    async googleAuth() {}
+
+    @Get('google/redirect')
+    @UseGuards(GoogleAuthGuard)
+    async googleRedirect(@Req() req: RequestWithUser) {
+        const tokens = await this.authService.generateUserTokens(req.user);
+        return {
+            message: 'Login via Google successful',
+            user: req.user,
+            ...tokens,
+        };
     }
 }

@@ -14,8 +14,12 @@ import {
     AllTransactionsInfoSchema,
 } from 'src/transactions/schemas/all-info.schema';
 
+import { PassportModule } from '@nestjs/passport';
+import { GoogleStrategy } from './strategies/google.strategy';
+
 @Module({
     imports: [
+        PassportModule,
         MongooseModule.forFeature([
             {
                 name: User.name,
@@ -36,6 +40,6 @@ import {
         ]),
     ],
     controllers: [AuthController],
-    providers: [AuthService, MailService],
+    providers: [AuthService, MailService, GoogleStrategy],
 })
 export class AuthModule {}
