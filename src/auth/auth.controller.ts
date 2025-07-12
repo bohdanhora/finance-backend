@@ -84,17 +84,17 @@ export class AuthController {
         res.cookie('accessToken', tokens.accessToken, {
             httpOnly: true,
             secure: true,
-            sameSite: 'lax',
+            sameSite: 'none',
             maxAge: 1000 * 60 * 15,
         });
 
         res.cookie('refreshToken', tokens.refreshToken, {
             httpOnly: true,
             secure: true,
-            sameSite: 'lax',
+            sameSite: 'none',
             maxAge: 1000 * 60 * 60 * 24 * 7,
         });
 
-        return res.redirect('https://finance-front-zeta.vercel.app/login');
+        return res.redirect('https://finance-front-zeta.vercel.app');
     }
 }
