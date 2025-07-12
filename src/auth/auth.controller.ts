@@ -81,28 +81,8 @@ export class AuthController {
     async googleRedirect(@Req() req: RequestWithUser, @Res() res: Response) {
         const tokens = await this.authService.generateUserTokens(req.user);
 
-        res.cookie('accessToken', tokens.accessToken, {
-            httpOnly: true,
-            secure: true,
-            sameSite: 'none',
-            maxAge: 1000 * 60 * 15,
-        });
-
-        res.cookie('refreshToken', tokens.refreshToken, {
-            httpOnly: true,
-            secure: true,
-            sameSite: 'none',
-            maxAge: 1000 * 60 * 60 * 24 * 7,
-        });
-
-        res.status(200).send(`
-    <html>
-      <body>
-        <script>
-          window.location.href = "https://finance-front-zeta.vercel.app";
-        </script>
-      </body>
-    </html>
-  `);
+        return res.redirect(
+            `https://finance-front-zeta.vercel.app/login?accessToken=${tokens.accessToken}&refreshToken=${tokens.refreshToken}`,
+        );
     }
 }
