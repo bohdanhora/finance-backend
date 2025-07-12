@@ -95,6 +95,14 @@ export class AuthController {
             maxAge: 1000 * 60 * 60 * 24 * 7,
         });
 
-        return res.redirect('https://finance-front-zeta.vercel.app');
+        res.status(200).send(`
+    <html>
+      <body>
+        <script>
+          window.location.href = "https://finance-front-zeta.vercel.app";
+        </script>
+      </body>
+    </html>
+  `);
     }
 }
