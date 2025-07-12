@@ -82,7 +82,7 @@ export class AuthController {
         const tokens = await this.authService.generateUserTokens(req.user);
 
         return res.redirect(
-            `https://finance-front-zeta.vercel.app/login?accessToken=${tokens.accessToken}&refreshToken=${tokens.refreshToken}`,
+            `https://finance-front-zeta.vercel.app/login?accessToken=${tokens.accessToken}&refreshToken=${tokens.refreshToken}&userId=${tokens.userId}`,
         );
     }
 }
