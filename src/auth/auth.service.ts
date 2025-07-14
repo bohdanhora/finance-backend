@@ -18,6 +18,7 @@ import { ResetToken } from './schemas/reset-token.schema';
 import { MailService } from 'src/services/mail.service';
 import { LogoutDto } from './dtos/logout.dto';
 import { AllTransactionsInfo } from 'src/transactions/schemas/all-info.schema';
+import { VerificationService } from 'src/services/verification.service';
 
 @Injectable()
 export class AuthService {
@@ -31,10 +32,22 @@ export class AuthService {
         private ResetTokenModel: Model<ResetToken>,
         private jwtService: JwtService,
         private mailService: MailService,
+        private verificationService: VerificationService,
     ) {}
 
     async registration(registrationData: RegistrationDto) {
-        const { email, password, name } = registrationData;
+        const { email, password, name, verificationCode } = registrationData;
+
+        const isValid = await this.verificationService.verifyCode(
+            email,
+            verificationCode,
+        );
+
+        if (!isValid) {
+            throw new BadRequestException(
+                'Invalid or expired verification code',
+            );
+        }
 
         const emailInUse = await this.UserModel.findOne({
             email: registrationData.email,
@@ -261,5 +274,10 @@ export class AuthService {
         }
 
         return user;
+    }
+    async requestEmailCode(email: string) {
+        const code = await this.verificationService.createCode(email);
+        await this.mailService.sendEmailVerificationCode(email, code);
+        return { message: 'Verification code sent to email' };
     }
 }

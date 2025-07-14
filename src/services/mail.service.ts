@@ -29,4 +29,15 @@ export class MailService {
 
         await this.transporter.sendMail(mailOptions);
     }
+
+    async sendEmailVerificationCode(to: string, code: string): Promise<void> {
+        const mailOptions: SendMailOptions = {
+            from: 'Finance-app-backend service',
+            to,
+            subject: 'Email Verification Code',
+            html: `<p>Your verification code is: <b>${code}</b></p>`,
+        };
+
+        await this.transporter.sendMail(mailOptions);
+    }
 }
