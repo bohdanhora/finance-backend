@@ -8,18 +8,18 @@ export class VerificationService {
         return Math.floor(100000 + Math.random() * 900000).toString();
     }
 
-    async createCode(email: string): Promise<string> {
+    createCode(email: string) {
         const code = this.generateCode();
         this.codes.set(email, code);
         return code;
     }
 
-    async verifyCode(email: string, inputCode: string): Promise<boolean> {
+    verifyCode(email: string, inputCode: string) {
         const stored = this.codes.get(email);
         return stored === inputCode;
     }
 
-    async deleteCode(email: string) {
+    deleteCode(email: string) {
         this.codes.delete(email);
     }
 }

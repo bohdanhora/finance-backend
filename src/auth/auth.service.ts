@@ -38,7 +38,7 @@ export class AuthService {
     async registration(registrationData: RegistrationDto) {
         const { email, password, name, verificationCode } = registrationData;
 
-        const isValid = await this.verificationService.verifyCode(
+        const isValid = this.verificationService.verifyCode(
             email,
             verificationCode,
         );
@@ -276,7 +276,7 @@ export class AuthService {
         return user;
     }
     async requestEmailCode(email: string) {
-        const code = await this.verificationService.createCode(email);
+        const code = this.verificationService.createCode(email);
         await this.mailService.sendEmailVerificationCode(email, code);
         return { message: 'Verification code sent to email' };
     }
