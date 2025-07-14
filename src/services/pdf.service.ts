@@ -37,9 +37,12 @@ export class PdfService {
         const { totalIncome, totalSpend, transactions } = data;
 
         const tableBody = [
-            ['💵 Value', '📅 Date', '📂 Category', '📝 Description'],
+            ['Amount', 'Date', 'Category', 'Description'],
             ...transactions.map((tx) => [
-                tx.value.toString(),
+                (tx.transactionType === 'expence'
+                    ? -tx.value
+                    : tx.value
+                ).toString(),
                 new Date(tx.date).toLocaleDateString(),
                 tx.categorie,
                 tx.description,
@@ -48,7 +51,7 @@ export class PdfService {
 
         const docDefinition: TDocumentDefinitions = {
             content: [
-                { text: '📄Transactions report', style: 'header' },
+                { text: 'Transactions report', style: 'header' },
                 { text: `User ID: ${userId}`, margin: [0, 0, 0, 10] },
                 { text: `Total Income: ${totalIncome}`, style: 'summary' },
                 {
