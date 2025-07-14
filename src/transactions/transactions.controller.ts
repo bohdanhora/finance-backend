@@ -2,9 +2,11 @@ import {
     Body,
     Controller,
     Get,
+    Param,
     Post,
     Put,
     Req,
+    Res,
     UseGuards,
 } from '@nestjs/common';
 import { TransactionsService } from './transactions.service';
@@ -17,11 +19,16 @@ import { TransactionDto } from './dtos/transaction.dto';
 import { EssentialCheckedDto } from './dtos/essential-checked.dto';
 import { RemoveEssentialDto } from './dtos/remove-essential.dto';
 import { NewEssentialDto } from './dtos/add-new-essential.dto';
+import { Response } from 'express';
+import { PdfService } from 'src/services/pdf.service';
 
 @UseGuards(AuthGuard)
 @Controller('transactions')
 export class TransactionsController {
-    constructor(private readonly transactionsService: TransactionsService) {}
+    constructor(
+        private readonly transactionsService: TransactionsService,
+        private readonly pdfService: PdfService,
+    ) {}
     @Get('all-info')
     async getAllInfo(@Req() req: AuthenticatedRequest) {
         return this.transactionsService.getAllInfo(req);
@@ -89,5 +96,18 @@ export class TransactionsController {
         @Req() req: AuthenticatedRequest,
     ) {
         return this.transactionsService.addNewEssential(newEssentialData, req);
+    }
+
+    @Get(':userId')
+    async downloadPdf(@Param('userId') userId: string, @Res() res: Response) {
+        const buffer = await this.pdfService.generateUserPdf(userId);
+
+        res.set({
+            'Content-Type': 'application/pdf',
+            'Content-Disposition': `attachment; filename=transactions-${userId}.pdf`,
+            'Content-Length': buffer.length,
+        });
+
+        res.end(buffer);
     }
 }
