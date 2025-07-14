@@ -16,6 +16,7 @@ import {
 
 import { PassportModule } from '@nestjs/passport';
 import { GoogleStrategy } from './strategies/google.strategy';
+import { VerificationService } from 'src/services/verification.service';
 
 @Module({
     imports: [
@@ -40,6 +41,6 @@ import { GoogleStrategy } from './strategies/google.strategy';
         ]),
     ],
     controllers: [AuthController],
-    providers: [AuthService, MailService, GoogleStrategy],
+    providers: [AuthService, MailService, GoogleStrategy, VerificationService],
 })
 export class AuthModule {}

@@ -4,6 +4,7 @@ import { Model } from 'mongoose';
 import * as path from 'path';
 import PdfPrinter from 'pdfmake';
 import { TDocumentDefinitions } from 'pdfmake/interfaces';
+import { TransactionType } from 'src/transactions/dtos/transaction.dto';
 import {
     AllTransactionsInfo,
     AllTransactionsInfoDocument,
@@ -39,7 +40,7 @@ export class PdfService {
         const tableBody = [
             ['Amount', 'Date', 'Category', 'Description'],
             ...transactions.map((tx) => [
-                (tx.transactionType === 'expence'
+                (tx.transactionType === TransactionType.EXPENCE
                     ? -tx.value
                     : tx.value
                 ).toString(),

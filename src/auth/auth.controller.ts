@@ -20,6 +20,7 @@ import { LogoutDto } from './dtos/logout.dto';
 import { GoogleAuthGuard } from 'src/guards/google-auth.guard';
 import { UserDocument } from './schemas/user.schema';
 import { Response } from 'express';
+import { EmailVerificationRequestDto } from './dtos/email-verification-request.dto';
 
 interface RequestWithUserId extends Request {
     userId: string;
@@ -84,5 +85,10 @@ export class AuthController {
         return res.redirect(
             `https://finance-front-zeta.vercel.app/login?accessToken=${tokens.accessToken}&refreshToken=${tokens.refreshToken}&userId=${tokens.userId}`,
         );
+    }
+
+    @Post('request-email-code')
+    async requestEmailCode(@Body() { email }: EmailVerificationRequestDto) {
+        return this.authService.requestEmailCode(email);
     }
 }
