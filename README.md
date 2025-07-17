@@ -33,7 +33,6 @@ It handles authentication, budgeting logic, transaction management, PDF export, 
 | **Nodemailer**      | Email delivery (e.g., confirmations) |
 | **Class Validator** | DTO validation                       |
 | **Jest**            | Testing framework                    |
-| **Supertest**       | E2E API testing                      |
 
 ---
 
