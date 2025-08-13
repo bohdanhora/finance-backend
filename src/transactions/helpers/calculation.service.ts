@@ -9,7 +9,7 @@ export class CalculationService {
         type: TransactionType,
     ): number {
         switch (type) {
-            case TransactionType.EXPENCE: {
+            case TransactionType.EXPENSE: {
                 const result = totalAmount - transactionAmount;
                 return result < 0 ? 0 : result;
             }
@@ -36,7 +36,7 @@ export class CalculationService {
         transactionAmount: number,
         type: TransactionType,
     ): number {
-        if (type === TransactionType.EXPENCE) {
+        if (type === TransactionType.EXPENSE) {
             return currentSpend + transactionAmount;
         }
         return currentSpend;

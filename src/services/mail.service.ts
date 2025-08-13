@@ -1,6 +1,9 @@
-import nodemailer, { SendMailOptions } from 'nodemailer';
-import { Injectable } from '@nestjs/common';
+import { Injectable, InternalServerErrorException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import * as nodemailer from 'nodemailer';
+import * as handlebars from 'handlebars';
+import * as fs from 'fs';
+import * as path from 'path';
 
 @Injectable()
 export class MailService {
@@ -17,27 +20,58 @@ export class MailService {
         });
     }
 
+    private loadTemplate(
+        templateName: string,
+        context: Record<string, any>,
+    ): string {
+        const templatePath = path.join(
+            __dirname,
+            'templates',
+            `${templateName}.hbs`,
+        );
+        const templateSource = fs.readFileSync(templatePath, 'utf8');
+        const compiledTemplate = handlebars.compile(templateSource);
+        return compiledTemplate(context);
+    }
+
     async sendPasswordResetEmail(to: string, token: string): Promise<void> {
         const resetLink = `https://finance-front-zeta.vercel.app/reset-password?token=${token}`;
-        const mailOptions: SendMailOptions = {
+        const html = this.loadTemplate('password-reset', { resetLink });
+
+        const mailOptions = {
             from: 'Finance-app-backend service',
             to,
             subject: 'Password Reset Request',
-            html: `<p>You requested a password reset. Click the link below to reset your password:</p>
-             <p><a href="${resetLink}">Reset Password</a></p>`,
+            html,
         };
 
-        await this.transporter.sendMail(mailOptions);
+        try {
+            await this.transporter.sendMail(mailOptions);
+        } catch (error) {
+            throw new InternalServerErrorException({
+                message: 'Failed to send email',
+                cause: error instanceof Error ? error : undefined,
+            });
+        }
     }
 
     async sendEmailVerificationCode(to: string, code: string): Promise<void> {
-        const mailOptions: SendMailOptions = {
+        const html = this.loadTemplate('verification-code', { code });
+
+        const mailOptions = {
             from: 'Finance-app-backend service',
             to,
             subject: 'Email Verification Code',
-            html: `<p>Your verification code is: <b>${code}</b></p>`,
+            html,
         };
 
-        await this.transporter.sendMail(mailOptions);
+        try {
+            await this.transporter.sendMail(mailOptions);
+        } catch (error) {
+            throw new InternalServerErrorException({
+                message: 'Failed to send email',
+                cause: error instanceof Error ? error : undefined,
+            });
+        }
     }
 }

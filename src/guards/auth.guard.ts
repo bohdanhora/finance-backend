@@ -7,6 +7,7 @@ import {
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { Request } from 'express';
+import { Types } from 'mongoose';
 import { Observable } from 'rxjs';
 
 interface AuthenticatedRequest extends Request {
@@ -31,6 +32,11 @@ export class AuthGuard implements CanActivate {
 
         try {
             const payload = this.jwtService.verify<{ userId: string }>(token);
+
+            if (!payload.userId || !Types.ObjectId.isValid(payload.userId)) {
+                throw new UnauthorizedException('Invalid userId in token');
+            }
+
             request.userId = payload.userId;
         } catch (error: unknown) {
             if (error instanceof Error) {

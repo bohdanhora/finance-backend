@@ -8,7 +8,7 @@ import {
 import { RegistrationDto } from './dtos/registration.dto';
 import { InjectModel } from '@nestjs/mongoose';
 import { User, UserDocument } from './schemas/user.schema';
-import { Model } from 'mongoose';
+import { Model, Types } from 'mongoose';
 import * as bcrypt from 'bcrypt';
 import { LoginDto } from './dtos/login.dto';
 import { JwtService } from '@nestjs/jwt';
@@ -19,6 +19,7 @@ import { MailService } from 'src/services/mail.service';
 import { LogoutDto } from './dtos/logout.dto';
 import { AllTransactionsInfo } from 'src/transactions/schemas/all-info.schema';
 import { VerificationService } from 'src/services/verification.service';
+import { ConfigService } from '@nestjs/config';
 
 @Injectable()
 export class AuthService {
@@ -33,6 +34,7 @@ export class AuthService {
         private jwtService: JwtService,
         private mailService: MailService,
         private verificationService: VerificationService,
+        private configService: ConfigService,
     ) {}
 
     async registration(registrationData: RegistrationDto) {
@@ -117,6 +119,10 @@ export class AuthService {
             throw new UnauthorizedException();
         }
 
+        if (!Types.ObjectId.isValid(token.userId)) {
+            throw new BadRequestException('Invalid userId format');
+        }
+
         return this.generateUserTokens(token.userId.toString());
     }
 
@@ -125,24 +131,35 @@ export class AuthService {
     ): Promise<{ accessToken: string; refreshToken: string; userId: string }> {
         const userId =
             typeof userOrId === 'string' ? userOrId : userOrId._id.toString();
+
+        if (!Types.ObjectId.isValid(userId)) {
+            throw new BadRequestException('Invalid userId format');
+        }
+
+        const accessTokenTtl =
+            this.configService.get<string>('jwt.accessTokenTtl')!;
+        const refreshTokenDays = this.configService.get<number>(
+            'jwt.refreshTokenTtlDays',
+        )!;
+
         const accessToken = this.jwtService.sign(
             { userId },
-            { expiresIn: '1h' },
+            { expiresIn: accessTokenTtl },
         );
         const refreshToken = uuidv4();
 
-        await this.storeRefreshToken(refreshToken, userId);
+        await this.storeRefreshToken(refreshToken, userId, refreshTokenDays);
 
-        return {
-            accessToken,
-            refreshToken,
-            userId,
-        };
+        return { accessToken, refreshToken, userId };
     }
 
-    async storeRefreshToken(token: string, userId: string) {
+    async storeRefreshToken(token: string, userId: string, days: number) {
+        if (!Types.ObjectId.isValid(userId)) {
+            throw new BadRequestException('Invalid userId format');
+        }
+
         const expiryDate = new Date();
-        expiryDate.setDate(expiryDate.getDate() + 3);
+        expiryDate.setDate(expiryDate.getDate() + days);
 
         await this.RefreshTokenModel.updateOne(
             { userId },
@@ -158,6 +175,10 @@ export class AuthService {
             newPassword,
         }: { oldPassword: string; newPassword: string },
     ) {
+        if (!Types.ObjectId.isValid(userId)) {
+            throw new BadRequestException('Invalid userId format');
+        }
+
         const user = await this.UserModel.findById(userId);
         if (!user) {
             throw new NotFoundException('User not found');
@@ -215,6 +236,10 @@ export class AuthService {
             throw new UnauthorizedException('Invalid link');
         }
 
+        if (!Types.ObjectId.isValid(token.userId)) {
+            throw new BadRequestException('Invalid userId format');
+        }
+
         const user = await this.UserModel.findById(token.userId);
         if (!user) {
             throw new InternalServerErrorException();
@@ -229,6 +254,10 @@ export class AuthService {
     }
 
     async logout({ userId }: LogoutDto) {
+        if (!Types.ObjectId.isValid(userId)) {
+            throw new BadRequestException('Invalid userId format');
+        }
+
         const user = await this.UserModel.findById(userId);
 
         if (!user) {
