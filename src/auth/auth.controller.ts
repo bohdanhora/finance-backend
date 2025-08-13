@@ -79,11 +79,22 @@ export class AuthController {
 
     @Get('google/redirect')
     @UseGuards(GoogleAuthGuard)
-    async googleRedirect(@Req() req: RequestWithUser, @Res() res: Response) {
+    async googleRedirect(
+        @Req() req: RequestWithUser,
+        @Res() res: Response, // Manual response handling (NestJS auto-response disabled)
+    ) {
+        /**
+         * NOTE:
+         * Using @Res() directly disables NestJS automatic response handling
+         * (interceptors, pipes, exception filters).
+         * This is intentional here because we need to perform a redirect
+         * after successful OAuth authentication.
+         */
         const tokens = await this.authService.generateUserTokens(req.user);
 
         return res.redirect(
-            `https://finance-front-zeta.vercel.app/login?accessToken=${tokens.accessToken}&refreshToken=${tokens.refreshToken}&userId=${tokens.userId}`,
+            `https://finance-front-zeta.vercel.app/login?` +
+                `accessToken=${tokens.accessToken}&refreshToken=${tokens.refreshToken}&userId=${tokens.userId}`,
         );
     }
 

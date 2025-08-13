@@ -1,6 +1,6 @@
 import { PassportStrategy } from '@nestjs/passport';
 import { Strategy, Profile, VerifyCallback } from 'passport-google-oauth20';
-import { Injectable } from '@nestjs/common';
+import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { AuthService } from '../auth.service';
 
@@ -27,7 +27,10 @@ export class GoogleStrategy extends PassportStrategy(Strategy, 'google') {
         const { emails, name, photos } = profile;
 
         if (!emails?.[0]?.value) {
-            throw new Error('Google account has no email');
+            return done(
+                new UnauthorizedException('Google account has no email'),
+                false,
+            );
         }
 
         const user = await this.authService.validateOAuthLogin({

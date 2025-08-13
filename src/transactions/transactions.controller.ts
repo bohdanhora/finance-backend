@@ -6,8 +6,11 @@ import {
     Post,
     Put,
     Req,
-    Res,
     UseGuards,
+    StreamableFile,
+    Header,
+    ForbiddenException,
+    NotFoundException,
 } from '@nestjs/common';
 import { TransactionsService } from './transactions.service';
 import { AuthenticatedRequest } from 'src/app.controller';
@@ -19,8 +22,8 @@ import { TransactionDto } from './dtos/transaction.dto';
 import { EssentialCheckedDto } from './dtos/essential-checked.dto';
 import { RemoveEssentialDto } from './dtos/remove-essential.dto';
 import { NewEssentialDto } from './dtos/add-new-essential.dto';
-import { Response } from 'express';
 import { PdfService } from 'src/services/pdf.service';
+import { Readable } from 'stream';
 
 @UseGuards(AuthGuard)
 @Controller('transactions')
@@ -29,10 +32,12 @@ export class TransactionsController {
         private readonly transactionsService: TransactionsService,
         private readonly pdfService: PdfService,
     ) {}
+
     @Get('all-info')
     async getAllInfo(@Req() req: AuthenticatedRequest) {
         return this.transactionsService.getAllInfo(req);
     }
+
     @Post('new-transaction')
     async newTransaction(
         @Body() newTransactionData: TransactionDto,
@@ -40,6 +45,7 @@ export class TransactionsController {
     ) {
         return this.transactionsService.newTransaction(newTransactionData, req);
     }
+
     @Post('set-total')
     async setTotalAmount(
         @Body() totalAmountData: TotalAmountDto,
@@ -47,6 +53,7 @@ export class TransactionsController {
     ) {
         return this.transactionsService.setTotalAmount(totalAmountData, req);
     }
+
     @Post('set-next-month-total')
     async setNextMonthTotalAmount(
         @Body() nextMonthTotalAmountData: NextMonthTotalAmountDto,
@@ -68,6 +75,7 @@ export class TransactionsController {
             req,
         );
     }
+
     @Put('set-checked-essential-payments')
     async setCheckedEssentalPayments(
         @Body() checkedEssentialPaymentsData: EssentialCheckedDto,
@@ -99,15 +107,29 @@ export class TransactionsController {
     }
 
     @Get(':userId')
-    async downloadPdf(@Param('userId') userId: string, @Res() res: Response) {
-        const buffer = await this.pdfService.generateUserPdf(userId);
+    @UseGuards(AuthGuard)
+    @Header('Content-Type', 'application/pdf')
+    async downloadPdf(
+        @Param('userId') userId: string,
+        @Req() req: AuthenticatedRequest,
+    ): Promise<StreamableFile> {
+        if (req.userId !== userId) {
+            throw new ForbiddenException('Access denied');
+        }
 
-        res.set({
-            'Content-Type': 'application/pdf',
-            'Content-Disposition': `attachment; filename=transactions-${userId}.pdf`,
-            'Content-Length': buffer.length,
+        const buffer = await this.pdfService.generateUserPdf(
+            userId,
+            req.userId,
+        );
+
+        if (!buffer) {
+            throw new NotFoundException('PDF not found');
+        }
+
+        const stream = Readable.from(buffer);
+        return new StreamableFile(stream, {
+            disposition: `attachment; filename=transactions-${userId}.pdf`,
+            length: buffer.length,
         });
-
-        res.end(buffer);
     }
 }

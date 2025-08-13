@@ -1,6 +1,11 @@
 export default () => ({
     jwt: {
         secret: process.env.JWT_SECRET,
+        accessTokenTtl: process.env.JWT_ACCESS_TOKEN_TTL || '1h',
+        refreshTokenTtlDays: parseInt(
+            process.env.JWT_REFRESH_TOKEN_TTL_DAYS || '3',
+            10,
+        ),
     },
     database: {
         connectionString: process.env.MONGO_URL,

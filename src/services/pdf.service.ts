@@ -1,6 +1,11 @@
-import { Injectable } from '@nestjs/common';
+import {
+    BadRequestException,
+    Injectable,
+    NotFoundException,
+    UnauthorizedException,
+} from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { Model } from 'mongoose';
+import { Model, Types } from 'mongoose';
 import * as path from 'path';
 import PdfPrinter from 'pdfmake';
 import { TDocumentDefinitions } from 'pdfmake/interfaces';
@@ -30,17 +35,25 @@ export class PdfService {
         return new PdfPrinter(fonts);
     }
 
-    async generateUserPdf(userId: string): Promise<Buffer> {
+    async generateUserPdf(userId: string, reqUserId: string): Promise<Buffer> {
+        if (!Types.ObjectId.isValid(userId)) {
+            throw new BadRequestException('Invalid userId format');
+        }
+
+        if (userId !== reqUserId) {
+            throw new UnauthorizedException('Access denied to requested PDF');
+        }
+
         const data = await this.transactionsModel.findOne({ userId });
 
-        if (!data) throw new Error('User not found');
+        if (!data) throw new NotFoundException('User not found');
 
         const { totalIncome, totalSpend, transactions } = data;
 
         const tableBody = [
             ['Amount', 'Date', 'Category', 'Description'],
             ...transactions.map((tx) => [
-                (tx.transactionType === TransactionType.EXPENCE
+                (tx.transactionType === TransactionType.EXPENSE
                     ? -tx.value
                     : tx.value
                 ).toString(),

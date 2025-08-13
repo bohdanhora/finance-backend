@@ -1,7 +1,7 @@
 import { IsDateString, IsEnum, IsNumber, IsString } from 'class-validator';
 
 export enum TransactionType {
-    EXPENCE = 'expence',
+    EXPENSE = 'expense',
     INCOME = 'income',
 }
 

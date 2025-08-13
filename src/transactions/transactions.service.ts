@@ -4,7 +4,7 @@ import {
     UnauthorizedException,
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { Model } from 'mongoose';
+import { Model, Types } from 'mongoose';
 import { AuthenticatedRequest } from 'src/app.controller';
 import { User } from 'src/auth/schemas/user.schema';
 import { AllTransactionsInfo } from './schemas/all-info.schema';
@@ -46,6 +46,9 @@ export class TransactionsService {
     private getUserIdOrThrow(req: AuthenticatedRequest): string {
         if (!req.userId) {
             throw new UnauthorizedException('User ID not found');
+        }
+        if (!Types.ObjectId.isValid(req.userId)) {
+            throw new BadRequestException('Invalid userId format');
         }
         return req.userId;
     }
