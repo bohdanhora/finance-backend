@@ -24,11 +24,7 @@ export class MailService {
         templateName: string,
         context: Record<string, any>,
     ): string {
-        const templatePath = path.join(
-            __dirname,
-            'templates',
-            `${templateName}.hbs`,
-        );
+        const templatePath = path.resolve('./templates', `${templateName}.hbs`);
         const templateSource = fs.readFileSync(templatePath, 'utf8');
         const compiledTemplate = handlebars.compile(templateSource);
         return compiledTemplate(context);
