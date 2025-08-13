@@ -25,8 +25,8 @@ export class MailService {
         context: Record<string, any>,
     ): string {
         const templatePath = path.resolve(
-            process.cwd(),
-            'templates',
+            __dirname,
+            './templates',
             `${templateName}.hbs`,
         );
         const templateSource = fs.readFileSync(templatePath, 'utf8');
