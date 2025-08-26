@@ -20,6 +20,7 @@ import { CalculationService } from './helpers/calculation.service';
 import { EssentialCheckedDto } from './dtos/essential-checked.dto';
 import { RemoveEssentialDto } from './dtos/remove-essential.dto';
 import { NewEssentialDto } from './dtos/add-new-essential.dto';
+import { ClearAllInfoDto } from './dtos/clear-all-info';
 
 @Injectable()
 export class TransactionsService {
@@ -246,6 +247,35 @@ export class TransactionsService {
             message: 'Essential added',
             addedItem: item,
             updatedItems,
+        };
+    }
+
+    async clearAllInfo(
+        { clearTotals }: ClearAllInfoDto,
+        req: AuthenticatedRequest,
+    ) {
+        const userId = this.getUserIdOrThrow(req);
+
+        const updateData: Partial<AllTransactionsInfo> = {
+            transactions: [],
+        };
+
+        if (clearTotals) {
+            updateData.totalAmount = 0;
+            updateData.totalIncome = 0;
+            updateData.totalSpend = 0;
+            updateData.nextMonthTotalAmount = 0;
+        }
+
+        await this.AllTransactionsInfoModel.updateOne(
+            { userId },
+            { $set: updateData },
+        );
+
+        return {
+            message: 'All info cleared',
+            clearedTransactions: true,
+            clearedTotals: clearTotals,
         };
     }
 }
