@@ -24,6 +24,7 @@ import { RemoveEssentialDto } from './dtos/remove-essential.dto';
 import { NewEssentialDto } from './dtos/add-new-essential.dto';
 import { PdfService } from 'src/services/pdf.service';
 import { Readable } from 'stream';
+import { ClearAllInfoDto } from './dtos/clear-all-info';
 
 @UseGuards(AuthGuard)
 @Controller('transactions')
@@ -131,5 +132,13 @@ export class TransactionsController {
             disposition: `attachment; filename=transactions-${userId}.pdf`,
             length: buffer.length,
         });
+    }
+
+    @Post('clear-all')
+    async clearAllInfo(
+        @Body() clearAllInfoData: ClearAllInfoDto,
+        @Req() req: AuthenticatedRequest,
+    ) {
+        return this.transactionsService.clearAllInfo(clearAllInfoData, req);
     }
 }
