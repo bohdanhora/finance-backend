@@ -21,6 +21,7 @@ import { EssentialCheckedDto } from './dtos/essential-checked.dto';
 import { RemoveEssentialDto } from './dtos/remove-essential.dto';
 import { NewEssentialDto } from './dtos/add-new-essential.dto';
 import { ClearAllInfoDto } from './dtos/clear-all-info';
+import { SetPercentDto } from './dtos/percent';
 
 @Injectable()
 export class TransactionsService {
@@ -276,6 +277,24 @@ export class TransactionsService {
             message: 'All info cleared',
             clearedTransactions: true,
             clearedTotals: clearTotals,
+        };
+    }
+
+    async setPercent({ percent }: SetPercentDto, req: AuthenticatedRequest) {
+        const userId = this.getUserIdOrThrow(req);
+
+        const updateData: Partial<AllTransactionsInfo> = {
+            savePercent: percent,
+        };
+
+        await this.AllTransactionsInfoModel.updateOne(
+            { userId },
+            { $set: updateData },
+        );
+
+        return {
+            message: 'Save Percent updated',
+            percent,
         };
     }
 }

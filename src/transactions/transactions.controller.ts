@@ -25,6 +25,7 @@ import { NewEssentialDto } from './dtos/add-new-essential.dto';
 import { PdfService } from 'src/services/pdf.service';
 import { Readable } from 'stream';
 import { ClearAllInfoDto } from './dtos/clear-all-info';
+import { SetPercentDto } from './dtos/percent';
 
 @UseGuards(AuthGuard)
 @Controller('transactions')
@@ -140,5 +141,13 @@ export class TransactionsController {
         @Req() req: AuthenticatedRequest,
     ) {
         return this.transactionsService.clearAllInfo(clearAllInfoData, req);
+    }
+
+    @Post('percent')
+    async setPercent(
+        @Body() percent: SetPercentDto,
+        @Req() req: AuthenticatedRequest,
+    ) {
+        return this.transactionsService.setPercent(percent, req);
     }
 }
