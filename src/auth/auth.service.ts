@@ -295,6 +295,7 @@ export class AuthService {
                 totalIncome: 0,
                 totalSpend: 0,
                 nextMonthTotalAmount: 0,
+                savePercent: 0,
                 defaultEssentialsArray: [],
                 essentialsArray: [],
                 nextMonthEssentialsArray: [],
