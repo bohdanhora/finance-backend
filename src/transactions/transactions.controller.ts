@@ -26,6 +26,7 @@ import { PdfService } from 'src/services/pdf.service';
 import { Readable } from 'stream';
 import { ClearAllInfoDto } from './dtos/clear-all-info';
 import { SetPercentDto } from './dtos/percent';
+import { DeleteTransaction } from './dtos/delete-transaction';
 
 @UseGuards(AuthGuard)
 @Controller('transactions')
@@ -149,5 +150,13 @@ export class TransactionsController {
         @Req() req: AuthenticatedRequest,
     ) {
         return this.transactionsService.setPercent(percent, req);
+    }
+
+    @Post('delete-transaction')
+    async deleteTransaction(
+        @Body() transactionId: DeleteTransaction,
+        @Req() req: AuthenticatedRequest,
+    ) {
+        return this.transactionsService.deleteTransaction(transactionId, req);
     }
 }

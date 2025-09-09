@@ -67,4 +67,38 @@ export class CalculationService {
             ),
         };
     }
+
+    calculateTotalsAfterDelete(
+        currentTotalAmount: number,
+        currentTotalIncome: number,
+        currentTotalSpend: number,
+        transactionAmount: number,
+        type: TransactionType,
+    ) {
+        switch (type) {
+            case TransactionType.EXPENSE:
+                return {
+                    totalAmount: currentTotalAmount + transactionAmount,
+                    totalIncome: currentTotalIncome,
+                    totalSpend: Math.max(
+                        0,
+                        currentTotalSpend - transactionAmount,
+                    ),
+                };
+            case TransactionType.INCOME:
+                return {
+                    totalAmount: Math.max(
+                        0,
+                        currentTotalAmount - transactionAmount,
+                    ),
+                    totalIncome: Math.max(
+                        0,
+                        currentTotalIncome - transactionAmount,
+                    ),
+                    totalSpend: currentTotalSpend,
+                };
+            default:
+                throw new Error(`Unknown transaction type: ${String(type)}`);
+        }
+    }
 }
