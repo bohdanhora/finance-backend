@@ -23,6 +23,7 @@ import { NewEssentialDto } from './dtos/add-new-essential.dto';
 import { ClearAllInfoDto } from './dtos/clear-all-info';
 import { SetPercentDto } from './dtos/percent';
 import { DeleteTransaction } from './dtos/delete-transaction';
+import { UpdateTransactionDto } from './dtos/update-transaction';
 
 @Injectable()
 export class TransactionsService {
@@ -351,6 +352,82 @@ export class TransactionsService {
         return {
             message: 'Transaction deleted successfully',
             deletedTransactionId: transactionId,
+            updatedTotals,
+            updatedItems: userTransactionsInfo.transactions,
+        };
+    }
+
+    async updateTransaction(
+        {
+            transactionId,
+            value,
+            transactionType,
+            description,
+            date,
+            categorie,
+        }: UpdateTransactionDto,
+        req: AuthenticatedRequest,
+    ) {
+        const userId = this.getUserIdOrThrow(req);
+
+        const userTransactionsInfo =
+            await this.AllTransactionsInfoModel.findOne({ userId });
+        if (!userTransactionsInfo) {
+            throw new UnauthorizedException('Transaction data not found');
+        }
+
+        const transactionIndex = userTransactionsInfo.transactions.findIndex(
+            (t) => t.id === transactionId,
+        );
+
+        if (transactionIndex === -1) {
+            throw new BadRequestException('Transaction not found');
+        }
+
+        const oldTransaction =
+            userTransactionsInfo.transactions[transactionIndex];
+
+        let revertedTotals = this.calculationService.calculateTotalsAfterDelete(
+            userTransactionsInfo.totalAmount,
+            userTransactionsInfo.totalIncome,
+            userTransactionsInfo.totalSpend,
+            oldTransaction.value,
+            oldTransaction.transactionType,
+        );
+
+        Object.assign(userTransactionsInfo, revertedTotals);
+
+        userTransactionsInfo.transactions[transactionIndex] = {
+            ...oldTransaction,
+            value,
+            transactionType,
+            categorie: categorie ?? oldTransaction.description,
+            description: description ?? oldTransaction.description,
+            date: date ?? oldTransaction.date,
+        };
+
+        const updatedTotals = this.calculationService.calculateAllTotals(
+            userTransactionsInfo.totalAmount,
+            userTransactionsInfo.totalIncome,
+            userTransactionsInfo.totalSpend,
+            value,
+            transactionType,
+        );
+
+        if (updatedTotals.totalAmount <= 0) {
+            throw new BadRequestException(
+                'Transaction cannot be updated because total would be zero or negative',
+            );
+        }
+
+        Object.assign(userTransactionsInfo, updatedTotals);
+
+        await userTransactionsInfo.save();
+
+        return {
+            message: 'Transaction updated successfully',
+            updatedTransaction:
+                userTransactionsInfo.transactions[transactionIndex],
             updatedTotals,
             updatedItems: userTransactionsInfo.transactions,
         };
