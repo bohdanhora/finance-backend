@@ -1,6 +1,6 @@
-# 🧠 Finance App — Backend
+# 🧠 Finance App - Backend
 
-This is the **backend** of the Finance App — a NestJS-powered REST API built as a **pet project** by [**Bohdan Hora**](https://github.com/bohdanhora).  
+This is the **backend** of the Finance App - a NestJS-powered REST API built as a **pet project** by [**Bohdan Hora**](https://github.com/bohdanhora).  
 It handles authentication, budgeting logic, transaction management, PDF export, and email functionality.
 
 ---
