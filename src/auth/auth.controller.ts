@@ -21,6 +21,7 @@ import { GoogleAuthGuard } from 'src/guards/google-auth.guard';
 import { UserDocument } from './schemas/user.schema';
 import { Response } from 'express';
 import { EmailVerificationRequestDto } from './dtos/email-verification-request.dto';
+import { ConfigService } from '@nestjs/config';
 
 interface RequestWithUserId extends Request {
     userId: string;
@@ -32,7 +33,10 @@ interface RequestWithUser extends Request {
 
 @Controller('auth')
 export class AuthController {
-    constructor(private readonly authService: AuthService) {}
+    constructor(
+        private readonly authService: AuthService,
+        private readonly configService: ConfigService,
+    ) {}
 
     @Post('registration')
     async registration(@Body() registationData: RegistrationDto) {
@@ -92,8 +96,10 @@ export class AuthController {
          */
         const tokens = await this.authService.generateUserTokens(req.user);
 
+        const frontendUrl = this.configService.get<string>('app.frontendUrl');
+
         return res.redirect(
-            `https://finance-front-zeta.vercel.app/login?` +
+            `${frontendUrl}/login?` +
                 `accessToken=${tokens.accessToken}&refreshToken=${tokens.refreshToken}&userId=${tokens.userId}`,
         );
     }

@@ -1,4 +1,8 @@
 export default () => ({
+    app: {
+        frontendUrl:
+            process.env.FRONTEND_URL || 'https://finance-front-zeta.vercel.app',
+    },
     jwt: {
         secret: process.env.JWT_SECRET,
         accessTokenTtl: process.env.JWT_ACCESS_TOKEN_TTL || '1h',
