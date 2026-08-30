@@ -24,6 +24,12 @@ import { ClearAllInfoDto } from './dtos/clear-all-info';
 import { SetPercentDto } from './dtos/percent';
 import { DeleteTransaction } from './dtos/delete-transaction';
 import { UpdateTransactionDto } from './dtos/update-transaction';
+import {
+    buildMonthRolloverUpdate,
+    getMonthDifference,
+    isMonthKey,
+    toMonthKey,
+} from './helpers/month-rollover';
 
 @Injectable()
 export class TransactionsService {
@@ -67,8 +73,17 @@ export class TransactionsService {
         return userData;
     }
 
-    async getAllInfo(req: AuthenticatedRequest) {
+    async getAllInfo(req: AuthenticatedRequest, requestedMonth?: string) {
         const userId = this.getUserIdOrThrow(req);
+        const currentMonth = requestedMonth ?? toMonthKey();
+
+        if (!isMonthKey(currentMonth)) {
+            throw new BadRequestException('Invalid current month');
+        }
+
+        if (Math.abs(getMonthDifference(toMonthKey(), currentMonth)) > 1) {
+            throw new BadRequestException('Current month is out of range');
+        }
 
         const user = await this.UserModel.findById(userId);
         if (!user) {
@@ -80,6 +95,16 @@ export class TransactionsService {
         });
         if (!transactions) {
             throw new BadRequestException('No transactions found');
+        }
+
+        const rolloverUpdate = buildMonthRolloverUpdate(
+            transactions,
+            currentMonth,
+        );
+
+        if (rolloverUpdate) {
+            transactions.set(rolloverUpdate);
+            await transactions.save();
         }
 
         return transactions;
@@ -387,13 +412,14 @@ export class TransactionsService {
         const oldTransaction =
             userTransactionsInfo.transactions[transactionIndex];
 
-        let revertedTotals = this.calculationService.calculateTotalsAfterDelete(
-            userTransactionsInfo.totalAmount,
-            userTransactionsInfo.totalIncome,
-            userTransactionsInfo.totalSpend,
-            oldTransaction.value,
-            oldTransaction.transactionType,
-        );
+        const revertedTotals =
+            this.calculationService.calculateTotalsAfterDelete(
+                userTransactionsInfo.totalAmount,
+                userTransactionsInfo.totalIncome,
+                userTransactionsInfo.totalSpend,
+                oldTransaction.value,
+                oldTransaction.transactionType,
+            );
 
         Object.assign(userTransactionsInfo, revertedTotals);
 
@@ -401,7 +427,7 @@ export class TransactionsService {
             ...oldTransaction,
             value,
             transactionType,
-            categorie: categorie ?? oldTransaction.description,
+            categorie: categorie ?? oldTransaction.categorie,
             description: description ?? oldTransaction.description,
             date: date ?? oldTransaction.date,
         };

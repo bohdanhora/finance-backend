@@ -20,6 +20,7 @@ import { LogoutDto } from './dtos/logout.dto';
 import { AllTransactionsInfo } from 'src/transactions/schemas/all-info.schema';
 import { VerificationService } from 'src/services/verification.service';
 import { ConfigService } from '@nestjs/config';
+import { toMonthKey } from 'src/transactions/helpers/month-rollover';
 
 @Injectable()
 export class AuthService {
@@ -74,6 +75,7 @@ export class AuthService {
             totalSpend: 0,
             nextMonthTotalAmount: 0,
             savePercent: 0,
+            lastProcessedMonth: toMonthKey(),
 
             defaultEssentialsArray: [],
             essentialsArray: [],
@@ -297,6 +299,7 @@ export class AuthService {
                 totalSpend: 0,
                 nextMonthTotalAmount: 0,
                 savePercent: 0,
+                lastProcessedMonth: toMonthKey(),
                 defaultEssentialsArray: [],
                 essentialsArray: [],
                 nextMonthEssentialsArray: [],

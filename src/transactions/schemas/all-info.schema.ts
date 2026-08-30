@@ -17,6 +17,8 @@ export class AllTransactionsInfo {
     nextMonthTotalAmount: number;
     @Prop({ required: true })
     savePercent: number;
+    @Prop({ required: true })
+    lastProcessedMonth: string;
     @Prop({ required: true, default: [] })
     defaultEssentialsArray: EssentialItemDto[];
     @Prop({ required: true, default: [] })

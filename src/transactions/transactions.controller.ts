@@ -11,6 +11,7 @@ import {
     Header,
     ForbiddenException,
     NotFoundException,
+    Query,
 } from '@nestjs/common';
 import { TransactionsService } from './transactions.service';
 import { AuthenticatedRequest } from 'src/app.controller';
@@ -28,6 +29,7 @@ import { ClearAllInfoDto } from './dtos/clear-all-info';
 import { SetPercentDto } from './dtos/percent';
 import { DeleteTransaction } from './dtos/delete-transaction';
 import { UpdateTransactionDto } from './dtos/update-transaction';
+import { CurrentMonthDto } from './dtos/current-month.dto';
 
 @UseGuards(AuthGuard)
 @Controller('transactions')
@@ -38,8 +40,11 @@ export class TransactionsController {
     ) {}
 
     @Get('all-info')
-    async getAllInfo(@Req() req: AuthenticatedRequest) {
-        return this.transactionsService.getAllInfo(req);
+    async getAllInfo(
+        @Req() req: AuthenticatedRequest,
+        @Query() { currentMonth }: CurrentMonthDto,
+    ) {
+        return this.transactionsService.getAllInfo(req, currentMonth);
     }
 
     @Post('new-transaction')
