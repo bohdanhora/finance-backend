@@ -2,6 +2,12 @@ import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { HydratedDocument } from 'mongoose';
 import { EssentialItemDto } from '../dtos/essential-payments.dto';
 import { TransactionDto } from '../dtos/transaction.dto';
+import {
+    SavingsGoal,
+    SavingsGoalSchema,
+    SavingsOperation,
+    SavingsOperationSchema,
+} from './savings.schema';
 
 @Schema()
 export class AllTransactionsInfo {
@@ -27,6 +33,10 @@ export class AllTransactionsInfo {
     nextMonthEssentialsArray: EssentialItemDto[];
     @Prop({ required: true, default: [] })
     transactions: TransactionDto[];
+    @Prop({ type: [SavingsGoalSchema], required: true, default: [] })
+    savingsGoals: SavingsGoal[];
+    @Prop({ type: [SavingsOperationSchema], required: true, default: [] })
+    savingsOperations: SavingsOperation[];
 }
 
 export type AllTransactionsInfoDocument = HydratedDocument<AllTransactionsInfo>;

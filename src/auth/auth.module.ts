@@ -17,6 +17,7 @@ import {
 import { PassportModule } from '@nestjs/passport';
 import { GoogleStrategy } from './strategies/google.strategy';
 import { VerificationService } from 'src/services/verification.service';
+import { TestAccountSeedService } from './test-account.seed';
 
 @Module({
     imports: [
@@ -41,6 +42,12 @@ import { VerificationService } from 'src/services/verification.service';
         ]),
     ],
     controllers: [AuthController],
-    providers: [AuthService, MailService, GoogleStrategy, VerificationService],
+    providers: [
+        AuthService,
+        MailService,
+        GoogleStrategy,
+        VerificationService,
+        TestAccountSeedService,
+    ],
 })
 export class AuthModule {}

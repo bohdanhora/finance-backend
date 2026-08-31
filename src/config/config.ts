@@ -14,6 +14,12 @@ export default () => ({
     database: {
         connectionString: process.env.MONGO_URL,
     },
+    testAccount: {
+        enabled: process.env.TEST_ACCOUNT_ENABLED !== 'false',
+        name: process.env.TEST_ACCOUNT_NAME || 'admin',
+        email: process.env.TEST_ACCOUNT_EMAIL || 'admin@admin.com',
+        password: process.env.TEST_ACCOUNT_PASSWORD || 'ChangeMe123',
+    },
     nodemailer: {
         host: process.env.NODEMAILER_HOST,
         port: process.env.NODEMAILER_PORT,

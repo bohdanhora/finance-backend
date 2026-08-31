@@ -1,0 +1,104 @@
+import { Type } from 'class-transformer';
+import {
+    IsDateString,
+    IsEnum,
+    IsNumber,
+    IsOptional,
+    IsString,
+    MaxLength,
+    Min,
+    ValidateIf,
+    ValidateNested,
+} from 'class-validator';
+
+export enum SavingsCurrency {
+    UAH = 'uah',
+    USD = 'usd',
+    EUR = 'eur',
+}
+
+export enum SavingsStorage {
+    CASH = 'cash',
+    CARD = 'card',
+}
+
+export enum SavingsOperationType {
+    DEPOSIT = 'deposit',
+    WITHDRAWAL = 'withdrawal',
+    TRANSFER = 'transfer',
+}
+
+export class SavingsGoalDto {
+    @IsString()
+    id: string;
+
+    @IsString()
+    @MaxLength(80)
+    name: string;
+
+    @IsNumber()
+    @Min(0.01)
+    targetAmount: number;
+
+    @IsEnum(SavingsCurrency)
+    currency: SavingsCurrency;
+
+    @IsNumber()
+    @Min(0)
+    monthlyContribution: number;
+
+    @IsOptional()
+    @IsDateString()
+    targetDate?: string;
+
+    @IsDateString()
+    createdAt: string;
+}
+
+export class SavingsGoalPayloadDto {
+    @ValidateNested()
+    @Type(() => SavingsGoalDto)
+    item: SavingsGoalDto;
+}
+
+export class SavingsOperationDto {
+    @IsString()
+    id: string;
+
+    @IsString()
+    goalId: string;
+
+    @IsEnum(SavingsOperationType)
+    type: SavingsOperationType;
+
+    @IsEnum(SavingsStorage)
+    storage: SavingsStorage;
+
+    @ValidateIf(
+        (item: SavingsOperationDto) =>
+            item.type === SavingsOperationType.TRANSFER,
+    )
+    @IsEnum(SavingsStorage)
+    destinationStorage?: SavingsStorage;
+
+    @IsNumber()
+    @Min(0.01)
+    amount: number;
+
+    @IsEnum(SavingsCurrency)
+    currency: SavingsCurrency;
+
+    @IsDateString()
+    date: string;
+
+    @IsOptional()
+    @IsString()
+    @MaxLength(160)
+    note?: string;
+}
+
+export class SavingsOperationPayloadDto {
+    @ValidateNested()
+    @Type(() => SavingsOperationDto)
+    item: SavingsOperationDto;
+}

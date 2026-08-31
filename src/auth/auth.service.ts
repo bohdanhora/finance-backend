@@ -81,6 +81,8 @@ export class AuthService {
             essentialsArray: [],
             nextMonthEssentialsArray: [],
             transactions: [],
+            savingsGoals: [],
+            savingsOperations: [],
         });
 
         return {
@@ -304,6 +306,8 @@ export class AuthService {
                 essentialsArray: [],
                 nextMonthEssentialsArray: [],
                 transactions: [],
+                savingsGoals: [],
+                savingsOperations: [],
             });
         }
 

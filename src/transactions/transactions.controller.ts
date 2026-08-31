@@ -1,6 +1,7 @@
 import {
     Body,
     Controller,
+    Delete,
     Get,
     Param,
     Post,
@@ -30,6 +31,11 @@ import { SetPercentDto } from './dtos/percent';
 import { DeleteTransaction } from './dtos/delete-transaction';
 import { UpdateTransactionDto } from './dtos/update-transaction';
 import { CurrentMonthDto } from './dtos/current-month.dto';
+import { UpdateEssentialDto } from './dtos/update-essential.dto';
+import {
+    SavingsGoalPayloadDto,
+    SavingsOperationPayloadDto,
+} from './dtos/savings.dto';
 
 @UseGuards(AuthGuard)
 @Controller('transactions')
@@ -113,6 +119,57 @@ export class TransactionsController {
         @Req() req: AuthenticatedRequest,
     ) {
         return this.transactionsService.addNewEssential(newEssentialData, req);
+    }
+
+    @Put('update-essential')
+    async updateEssential(
+        @Body() updateEssentialData: UpdateEssentialDto,
+        @Req() req: AuthenticatedRequest,
+    ) {
+        return this.transactionsService.updateEssential(
+            updateEssentialData,
+            req,
+        );
+    }
+
+    @Post('savings/goals')
+    async addSavingsGoal(
+        @Body() data: SavingsGoalPayloadDto,
+        @Req() req: AuthenticatedRequest,
+    ) {
+        return this.transactionsService.addSavingsGoal(data, req);
+    }
+
+    @Put('savings/goals')
+    async updateSavingsGoal(
+        @Body() data: SavingsGoalPayloadDto,
+        @Req() req: AuthenticatedRequest,
+    ) {
+        return this.transactionsService.updateSavingsGoal(data, req);
+    }
+
+    @Delete('savings/goals/:id')
+    async deleteSavingsGoal(
+        @Param('id') id: string,
+        @Req() req: AuthenticatedRequest,
+    ) {
+        return this.transactionsService.deleteSavingsGoal(id, req);
+    }
+
+    @Post('savings/operations')
+    async addSavingsOperation(
+        @Body() data: SavingsOperationPayloadDto,
+        @Req() req: AuthenticatedRequest,
+    ) {
+        return this.transactionsService.addSavingsOperation(data, req);
+    }
+
+    @Delete('savings/operations/:id')
+    async deleteSavingsOperation(
+        @Param('id') id: string,
+        @Req() req: AuthenticatedRequest,
+    ) {
+        return this.transactionsService.deleteSavingsOperation(id, req);
     }
 
     @Get(':userId')
