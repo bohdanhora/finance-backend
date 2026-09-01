@@ -33,12 +33,22 @@ const copyEssentials = (
     items: EssentialItemDto[] = [],
     resetChecked = false,
 ): EssentialItemDto[] =>
-    items.map(({ id, amount, title, checked }) => ({
-        id,
-        amount,
-        title,
-        checked: resetChecked ? false : checked,
-    }));
+    items.map((item) => {
+        const copiedItem: EssentialItemDto = {
+            id: item.id,
+            amount: item.amount,
+            title: item.title,
+            checked: resetChecked ? false : item.checked,
+        };
+
+        if (!resetChecked && item.checked) {
+            copiedItem.paidAmount = item.paidAmount;
+            copiedItem.paidAt = item.paidAt;
+            copiedItem.paymentTransactionId = item.paymentTransactionId;
+        }
+
+        return copiedItem;
+    });
 
 /**
  * Builds the persisted changes needed when the dashboard enters a new month.

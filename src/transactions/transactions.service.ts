@@ -5,6 +5,7 @@ import {
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
+import { v4 as uuidv4 } from 'uuid';
 import { AuthenticatedRequest } from 'src/app.controller';
 import { User } from 'src/auth/schemas/user.schema';
 import { AllTransactionsInfo } from './schemas/all-info.schema';
@@ -80,6 +81,16 @@ export class TransactionsService {
             throw new BadRequestException('User data not found');
         }
         return userData;
+    }
+
+    private isEssentialPaymentTransaction(
+        userData: AllTransactionsInfo,
+        transactionId: string,
+    ): boolean {
+        return [
+            ...(userData.essentialsArray || []),
+            ...(userData.nextMonthEssentialsArray || []),
+        ].some((essential) => essential.paymentTransactionId === transactionId);
     }
 
     async getAllInfo(req: AuthenticatedRequest, requestedMonth?: string) {
@@ -210,25 +221,136 @@ export class TransactionsService {
         { type, item }: EssentialCheckedDto,
         req: AuthenticatedRequest,
     ) {
+        if (type === EssentialsType.DEFAULT) {
+            throw new BadRequestException(
+                'Default essentials cannot be marked as paid',
+            );
+        }
+
         const userId = this.getUserIdOrThrow(req);
         const updateFieldName = this.getUpdateFieldName(type);
         const userData = await this.getUserDataOrThrow(userId);
-
         const currentItems =
             (userData[updateFieldName] as EssentialItemDto[]) || [];
-
-        const updatedItems = currentItems.map((el: EssentialItemDto) =>
-            el.id === item.id ? { ...el, checked: item.checked } : el,
+        const essentialIndex = currentItems.findIndex(
+            (essential) => essential.id === item.id,
         );
 
-        await this.AllTransactionsInfoModel.updateOne(
-            { userId },
-            { $set: { [updateFieldName]: updatedItems } },
-        );
+        if (essentialIndex === -1) {
+            throw new BadRequestException('Essential not found');
+        }
+
+        const essential = currentItems[essentialIndex];
+        const currentTotals = {
+            totalAmount: userData.totalAmount,
+            totalIncome: userData.totalIncome,
+            totalSpend: userData.totalSpend,
+        };
+
+        if (essential.checked === item.checked) {
+            return {
+                message: 'Essential checked state unchanged',
+                updatedItems: currentItems,
+                updatedTotals: currentTotals,
+                updatedTransactions: userData.transactions,
+            };
+        }
+
+        let updatedEssential: EssentialItemDto;
+        let updatedTotals = currentTotals;
+
+        if (item.checked) {
+            if (
+                item.actualAmount === undefined ||
+                !Number.isFinite(item.actualAmount) ||
+                item.actualAmount <= 0
+            ) {
+                throw new BadRequestException(
+                    'Actual payment amount must be greater than zero',
+                );
+            }
+            if (item.actualAmount > userData.totalAmount) {
+                throw new BadRequestException(
+                    'Not enough funds in the main balance',
+                );
+            }
+
+            const transactionId = uuidv4();
+            const paidAt = new Date();
+            const transaction: TransactionDto = {
+                transactionType: TransactionType.EXPENSE,
+                id: transactionId,
+                value: item.actualAmount,
+                date: paidAt,
+                categorie: 'essentials',
+                description: essential.title,
+            };
+
+            updatedTotals = this.calculationService.calculateAllTotals(
+                userData.totalAmount,
+                userData.totalIncome,
+                userData.totalSpend,
+                item.actualAmount,
+                TransactionType.EXPENSE,
+            );
+            userData.transactions.unshift(transaction);
+            updatedEssential = {
+                ...essential,
+                checked: true,
+                paidAmount: item.actualAmount,
+                paidAt: paidAt.toISOString(),
+                paymentTransactionId: transactionId,
+            };
+        } else {
+            const transactionIndex = essential.paymentTransactionId
+                ? userData.transactions.findIndex(
+                      (transaction) =>
+                          transaction.id === essential.paymentTransactionId,
+                  )
+                : -1;
+
+            if (transactionIndex >= 0) {
+                const transaction = userData.transactions[transactionIndex];
+                updatedTotals =
+                    this.calculationService.calculateTotalsAfterDelete(
+                        userData.totalAmount,
+                        userData.totalIncome,
+                        userData.totalSpend,
+                        transaction.value,
+                        transaction.transactionType,
+                    );
+                userData.transactions.splice(transactionIndex, 1);
+            } else if (
+                essential.paymentTransactionId &&
+                essential.paidAmount !== undefined
+            ) {
+                updatedTotals =
+                    this.calculationService.calculateTotalsAfterDelete(
+                        userData.totalAmount,
+                        userData.totalIncome,
+                        userData.totalSpend,
+                        essential.paidAmount,
+                        TransactionType.EXPENSE,
+                    );
+            }
+
+            updatedEssential = { ...essential, checked: false };
+            delete updatedEssential.paidAmount;
+            delete updatedEssential.paidAt;
+            delete updatedEssential.paymentTransactionId;
+        }
+
+        const updatedItems = [...currentItems];
+        updatedItems[essentialIndex] = updatedEssential;
+        userData.set(updateFieldName, updatedItems);
+        Object.assign(userData, updatedTotals);
+        await userData.save();
 
         return {
             message: 'Essential checked state updated',
             updatedItems,
+            updatedTotals,
+            updatedTransactions: userData.transactions,
         };
     }
 
@@ -242,6 +364,15 @@ export class TransactionsService {
         const userData = await this.getUserDataOrThrow(userId);
         const currentItems =
             (userData[updateFieldName] as EssentialItemDto[]) || [];
+        const essentialToRemove = currentItems.find(
+            (essential) => essential.id === id,
+        );
+
+        if (essentialToRemove?.checked) {
+            throw new BadRequestException(
+                'Reverse the essential payment before removing it',
+            );
+        }
 
         const updatedItems = currentItems.filter(
             (el: EssentialItemDto) => el.id !== id,
@@ -296,9 +427,17 @@ export class TransactionsService {
         const userData = await this.getUserDataOrThrow(userId);
         const currentItems =
             (userData[updateFieldName] as EssentialItemDto[]) || [];
+        const currentEssential = currentItems.find(
+            (essential) => essential.id === item.id,
+        );
 
-        if (!currentItems.some((essential) => essential.id === item.id)) {
+        if (!currentEssential) {
             throw new BadRequestException('Essential not found');
+        }
+        if (currentEssential.checked) {
+            throw new BadRequestException(
+                'Reverse the essential payment before updating it',
+            );
         }
 
         const updatedItems = currentItems.map((essential) =>
@@ -559,16 +698,35 @@ export class TransactionsService {
         req: AuthenticatedRequest,
     ) {
         const userId = this.getUserIdOrThrow(req);
+        const userData = clearTotals
+            ? await this.getUserDataOrThrow(userId)
+            : null;
 
         const updateData: Partial<AllTransactionsInfo> = {
             transactions: [],
         };
+        let essentialsArray: EssentialItemDto[] | undefined;
+        let nextMonthEssentialsArray: EssentialItemDto[] | undefined;
 
         if (clearTotals) {
+            const resetPayments = (items: EssentialItemDto[] = []) =>
+                items.map((item) => ({
+                    id: item.id,
+                    amount: item.amount,
+                    title: item.title,
+                    checked: false,
+                }));
+
             updateData.totalAmount = 0;
             updateData.totalIncome = 0;
             updateData.totalSpend = 0;
             updateData.nextMonthTotalAmount = 0;
+            essentialsArray = resetPayments(userData?.essentialsArray);
+            nextMonthEssentialsArray = resetPayments(
+                userData?.nextMonthEssentialsArray,
+            );
+            updateData.essentialsArray = essentialsArray;
+            updateData.nextMonthEssentialsArray = nextMonthEssentialsArray;
         }
 
         await this.AllTransactionsInfoModel.updateOne(
@@ -580,6 +738,8 @@ export class TransactionsService {
             message: 'All info cleared',
             clearedTransactions: true,
             clearedTotals: clearTotals,
+            essentialsArray,
+            nextMonthEssentialsArray,
         };
     }
 
@@ -619,6 +779,16 @@ export class TransactionsService {
 
         if (!transactionToDelete) {
             throw new BadRequestException('Transaction not found');
+        }
+        if (
+            this.isEssentialPaymentTransaction(
+                userTransactionsInfo,
+                transactionId,
+            )
+        ) {
+            throw new BadRequestException(
+                'Reverse essential payments from the essentials checklist',
+            );
         }
 
         if (transactionToDelete.transactionType === TransactionType.INCOME) {
@@ -683,6 +853,16 @@ export class TransactionsService {
 
         if (transactionIndex === -1) {
             throw new BadRequestException('Transaction not found');
+        }
+        if (
+            this.isEssentialPaymentTransaction(
+                userTransactionsInfo,
+                transactionId,
+            )
+        ) {
+            throw new BadRequestException(
+                'Reverse essential payments from the essentials checklist',
+            );
         }
 
         const oldTransaction =

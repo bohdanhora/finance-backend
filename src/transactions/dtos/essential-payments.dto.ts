@@ -6,6 +6,8 @@ import {
     IsArray,
     ValidateNested,
     IsEnum,
+    IsOptional,
+    IsDateString,
 } from 'class-validator';
 
 export class EssentialItemDto {
@@ -20,6 +22,18 @@ export class EssentialItemDto {
 
     @IsBoolean()
     checked: boolean;
+
+    @IsOptional()
+    @IsNumber()
+    paidAmount?: number;
+
+    @IsOptional()
+    @IsDateString()
+    paidAt?: string;
+
+    @IsOptional()
+    @IsString()
+    paymentTransactionId?: string;
 }
 
 export enum EssentialsType {
