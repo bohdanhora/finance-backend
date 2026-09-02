@@ -9,7 +9,7 @@
         "build": "nest build",
         "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
         "start": "nest start",
-        "start:dev": "nest start --watch",
+        "dev": "nest start --watch",
         "start:debug": "nest start --debug --watch",
         "start:prod": "node dist/main",
         "lint": "eslint \"{src,apps,libs,test}/**/*.ts\"",
@@ -39,7 +39,6 @@
         "nodemailer": "^7.0.4",
         "passport": "^0.7.0",
         "passport-google-oauth20": "^2.0.0",
-        "pdfmake": "^0.2.20",
         "reflect-metadata": "^0.2.2",
         "rxjs": "^7.8.1",
         "uuid": "^11.1.0"

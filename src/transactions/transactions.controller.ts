@@ -8,10 +8,6 @@ import {
     Put,
     Req,
     UseGuards,
-    StreamableFile,
-    Header,
-    ForbiddenException,
-    NotFoundException,
     Query,
 } from '@nestjs/common';
 import { TransactionsService } from './transactions.service';
@@ -24,8 +20,6 @@ import { TransactionDto } from './dtos/transaction.dto';
 import { EssentialCheckedDto } from './dtos/essential-checked.dto';
 import { RemoveEssentialDto } from './dtos/remove-essential.dto';
 import { NewEssentialDto } from './dtos/add-new-essential.dto';
-import { PdfService } from 'src/services/pdf.service';
-import { Readable } from 'stream';
 import { ClearAllInfoDto } from './dtos/clear-all-info';
 import { SetPercentDto } from './dtos/percent';
 import { DeleteTransaction } from './dtos/delete-transaction';
@@ -42,10 +36,7 @@ import { ChangeCurrencyDto } from './dtos/currency.dto';
 @UseGuards(AuthGuard)
 @Controller('transactions')
 export class TransactionsController {
-    constructor(
-        private readonly transactionsService: TransactionsService,
-        private readonly pdfService: PdfService,
-    ) {}
+    constructor(private readonly transactionsService: TransactionsService) {}
 
     @Get('all-info')
     async getAllInfo(
@@ -181,33 +172,6 @@ export class TransactionsController {
         @Req() req: AuthenticatedRequest,
     ) {
         return this.transactionsService.deleteSavingsOperation(id, req);
-    }
-
-    @Get(':userId')
-    @UseGuards(AuthGuard)
-    @Header('Content-Type', 'application/pdf')
-    async downloadPdf(
-        @Param('userId') userId: string,
-        @Req() req: AuthenticatedRequest,
-    ): Promise<StreamableFile> {
-        if (req.userId !== userId) {
-            throw new ForbiddenException('Access denied');
-        }
-
-        const buffer = await this.pdfService.generateUserPdf(
-            userId,
-            req.userId,
-        );
-
-        if (!buffer) {
-            throw new NotFoundException('PDF not found');
-        }
-
-        const stream = Readable.from(buffer);
-        return new StreamableFile(stream, {
-            disposition: `attachment; filename=transactions-${userId}.pdf`,
-            length: buffer.length,
-        });
     }
 
     @Post('clear-all')
