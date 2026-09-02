@@ -11,6 +11,7 @@ It handles authentication, budgeting logic, transaction management, PDF export, 
 - 🔐 Google OAuth login via Passport
 - 📧 Email sending via **Nodemailer**
 - 🧾 MongoDB storage for transactions and users
+- 🔥 Daily visit streak kept per account, so it follows the user across devices
 - 📊 Budget calculations including:
     - Monthly income and expenses
     - Remaining balance until end of month

@@ -9,6 +9,7 @@ import {
     SavingsOperation,
     SavingsOperationSchema,
 } from './savings.schema';
+import { Streak, StreakSchema } from './streak.schema';
 
 @Schema()
 export class AllTransactionsInfo {
@@ -40,6 +41,8 @@ export class AllTransactionsInfo {
     savingsGoals: SavingsGoal[];
     @Prop({ type: [SavingsOperationSchema], required: true, default: [] })
     savingsOperations: SavingsOperation[];
+    @Prop({ type: StreakSchema })
+    streak?: Streak;
 }
 
 export type AllTransactionsInfoDocument = HydratedDocument<AllTransactionsInfo>;

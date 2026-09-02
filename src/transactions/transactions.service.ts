@@ -44,6 +44,12 @@ import {
     toMonthKey,
 } from './helpers/month-rollover';
 import { ChangeCurrencyDto } from './dtos/currency.dto';
+import { StreakVisitDto } from './dtos/streak.dto';
+import {
+    StreakState,
+    registerStreakVisit,
+    resolveVisitDay,
+} from './helpers/streak';
 import {
     convertMainCurrencyAmounts,
     roundCurrency,
@@ -1069,6 +1075,43 @@ export class TransactionsService {
             essentialsArray,
             nextMonthEssentialsArray,
             updatedSavingsOperations,
+        };
+    }
+
+    /**
+     * Records that the app was opened today and returns the streak.
+     *
+     * Idempotent per day, so every device can call it on load: the second one
+     * through gets the same answer as the first and nothing is written.
+     */
+    async recordStreakVisit(
+        { day }: StreakVisitDto,
+        req: AuthenticatedRequest,
+    ) {
+        const userId = this.getUserIdOrThrow(req);
+        const userData = await this.getUserDataOrThrow(userId);
+
+        const storedStreak = userData.streak as
+            | (StreakState & { toObject?: () => StreakState })
+            | undefined;
+        const stored = storedStreak?.toObject?.() ?? storedStreak ?? null;
+
+        const { streak, changed, reached } = registerStreakVisit(
+            stored,
+            resolveVisitDay(day),
+        );
+
+        if (changed) {
+            await this.AllTransactionsInfoModel.updateOne(
+                { userId },
+                { $set: { streak } },
+            );
+        }
+
+        return {
+            message: changed ? 'Streak updated' : 'Streak already recorded',
+            streak,
+            reached,
         };
     }
 

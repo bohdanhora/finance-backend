@@ -32,6 +32,7 @@ import {
     SavingsOperationPayloadDto,
 } from './dtos/savings.dto';
 import { ChangeCurrencyDto } from './dtos/currency.dto';
+import { StreakVisitDto } from './dtos/streak.dto';
 
 @UseGuards(AuthGuard)
 @Controller('transactions')
@@ -172,6 +173,14 @@ export class TransactionsController {
         @Req() req: AuthenticatedRequest,
     ) {
         return this.transactionsService.deleteSavingsOperation(id, req);
+    }
+
+    @Post('streak/visit')
+    async recordStreakVisit(
+        @Body() data: StreakVisitDto,
+        @Req() req: AuthenticatedRequest,
+    ) {
+        return this.transactionsService.recordStreakVisit(data, req);
     }
 
     @Post('clear-all')
