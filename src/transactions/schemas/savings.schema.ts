@@ -36,8 +36,8 @@ export class SavingsOperation {
     @Prop({ required: true })
     id: string;
 
-    @Prop({ required: true })
-    goalId: string;
+    @Prop()
+    goalId?: string;
 
     @Prop({ required: true, enum: SavingsOperationType })
     type: SavingsOperationType;

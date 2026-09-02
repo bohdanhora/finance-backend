@@ -27,6 +27,7 @@ import { DeleteTransaction } from './dtos/delete-transaction';
 import { UpdateTransactionDto } from './dtos/update-transaction';
 import { UpdateEssentialDto } from './dtos/update-essential.dto';
 import {
+    SavingsCurrency,
     SavingsGoalDto,
     SavingsGoalPayloadDto,
     SavingsOperationDto,
@@ -458,11 +459,11 @@ export class TransactionsService {
 
     private getSavingsStorageBalance(
         operations: SavingsOperationDto[],
-        goalId: string,
         storage: SavingsStorage,
+        currency: SavingsCurrency,
     ) {
         return operations
-            .filter((operation) => operation.goalId === goalId)
+            .filter((operation) => operation.currency === currency)
             .reduce((total, operation) => {
                 if (operation.type === SavingsOperationType.DEPOSIT) {
                     return operation.storage === storage
@@ -520,21 +521,10 @@ export class TransactionsService {
         const userId = this.getUserIdOrThrow(req);
         const userData = await this.getUserDataOrThrow(userId);
         const goals = (userData.savingsGoals || []) as SavingsGoalDto[];
-        const operations = (userData.savingsOperations ||
-            []) as SavingsOperationDto[];
         const currentGoal = goals.find((goal) => goal.id === item.id);
 
         if (!currentGoal) {
             throw new BadRequestException('Savings goal not found');
-        }
-
-        if (
-            currentGoal.currency !== item.currency &&
-            operations.some((operation) => operation.goalId === item.id)
-        ) {
-            throw new BadRequestException(
-                'A goal currency cannot be changed after the first operation',
-            );
         }
 
         const updatedGoals = goals.map((goal) =>
@@ -549,7 +539,7 @@ export class TransactionsService {
         return {
             message: 'Savings goal updated',
             updatedGoals,
-            updatedOperations: operations,
+            updatedOperations: userData.savingsOperations || [],
         };
     }
 
@@ -565,24 +555,15 @@ export class TransactionsService {
         }
 
         const updatedGoals = goals.filter((goal) => goal.id !== id);
-        const updatedOperations = operations.filter(
-            (operation) => operation.goalId !== id,
-        );
-
         await this.AllTransactionsInfoModel.updateOne(
             { userId },
-            {
-                $set: {
-                    savingsGoals: updatedGoals,
-                    savingsOperations: updatedOperations,
-                },
-            },
+            { $set: { savingsGoals: updatedGoals } },
         );
 
         return {
             message: 'Savings goal deleted',
             updatedGoals,
-            updatedOperations,
+            updatedOperations: operations,
         };
     }
 
@@ -595,18 +576,6 @@ export class TransactionsService {
         const goals = (userData.savingsGoals || []) as SavingsGoalDto[];
         const operations = (userData.savingsOperations ||
             []) as SavingsOperationDto[];
-        const goal = goals.find(({ id }) => id === item.goalId);
-
-        if (!goal) {
-            throw new BadRequestException('Savings goal not found');
-        }
-
-        if (goal.currency !== item.currency) {
-            throw new BadRequestException(
-                'Operation currency must match the goal currency',
-            );
-        }
-
         if (operations.some((operation) => operation.id === item.id)) {
             throw new BadRequestException('Savings operation already exists');
         }
@@ -625,8 +594,8 @@ export class TransactionsService {
             item.type !== SavingsOperationType.DEPOSIT &&
             this.getSavingsStorageBalance(
                 operations,
-                item.goalId,
                 item.storage,
+                item.currency,
             ) < item.amount
         ) {
             throw new BadRequestException(
@@ -670,8 +639,8 @@ export class TransactionsService {
             (storage) =>
                 this.getSavingsStorageBalance(
                     updatedOperations,
-                    operationToDelete.goalId,
                     storage,
+                    operationToDelete.currency,
                 ) < 0,
         );
 

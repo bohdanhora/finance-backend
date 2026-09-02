@@ -65,8 +65,9 @@ export class SavingsOperationDto {
     @IsString()
     id: string;
 
+    @IsOptional()
     @IsString()
-    goalId: string;
+    goalId?: string;
 
     @IsEnum(SavingsOperationType)
     type: SavingsOperationType;
