@@ -14,6 +14,7 @@ import {
     AllTransactionsInfo,
     AllTransactionsInfoDocument,
 } from 'src/transactions/schemas/all-info.schema';
+import { SavingsCurrency } from 'src/transactions/dtos/savings.dto';
 
 @Injectable()
 export class PdfService {
@@ -49,9 +50,10 @@ export class PdfService {
         if (!data) throw new NotFoundException('User not found');
 
         const { totalIncome, totalSpend, transactions } = data;
+        const currency = (data.currency ?? SavingsCurrency.UAH).toUpperCase();
 
         const tableBody = [
-            ['Amount', 'Date', 'Category', 'Description'],
+            [`Amount (${currency})`, 'Date', 'Category', 'Description'],
             ...transactions.map((tx) => [
                 (tx.transactionType === TransactionType.EXPENSE
                     ? -tx.value
@@ -67,9 +69,12 @@ export class PdfService {
             content: [
                 { text: 'Transactions report', style: 'header' },
                 { text: `User ID: ${userId}`, margin: [0, 0, 0, 10] },
-                { text: `Total Income: ${totalIncome}`, style: 'summary' },
                 {
-                    text: `Total Spend: ${totalSpend}`,
+                    text: `Total Income: ${totalIncome} ${currency}`,
+                    style: 'summary',
+                },
+                {
+                    text: `Total Spend: ${totalSpend} ${currency}`,
                     style: 'summary',
                     margin: [0, 0, 0, 20],
                 },

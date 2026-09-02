@@ -33,9 +33,11 @@ import { UpdateTransactionDto } from './dtos/update-transaction';
 import { CurrentMonthDto } from './dtos/current-month.dto';
 import { UpdateEssentialDto } from './dtos/update-essential.dto';
 import {
+    DeleteSavingsGoalDto,
     SavingsGoalPayloadDto,
     SavingsOperationPayloadDto,
 } from './dtos/savings.dto';
+import { ChangeCurrencyDto } from './dtos/currency.dto';
 
 @UseGuards(AuthGuard)
 @Controller('transactions')
@@ -78,6 +80,14 @@ export class TransactionsController {
             nextMonthTotalAmountData,
             req,
         );
+    }
+
+    @Put('currency')
+    async changeCurrency(
+        @Body() data: ChangeCurrencyDto,
+        @Req() req: AuthenticatedRequest,
+    ) {
+        return this.transactionsService.changeCurrency(data, req);
     }
 
     @Put('set-essential-payments')
@@ -151,9 +161,10 @@ export class TransactionsController {
     @Delete('savings/goals/:id')
     async deleteSavingsGoal(
         @Param('id') id: string,
+        @Body() data: DeleteSavingsGoalDto,
         @Req() req: AuthenticatedRequest,
     ) {
-        return this.transactionsService.deleteSavingsGoal(id, req);
+        return this.transactionsService.deleteSavingsGoal(id, req, data);
     }
 
     @Post('savings/operations')

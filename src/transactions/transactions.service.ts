@@ -1,5 +1,6 @@
 import {
     BadRequestException,
+    ConflictException,
     Injectable,
     UnauthorizedException,
 } from '@nestjs/common';
@@ -27,6 +28,7 @@ import { DeleteTransaction } from './dtos/delete-transaction';
 import { UpdateTransactionDto } from './dtos/update-transaction';
 import { UpdateEssentialDto } from './dtos/update-essential.dto';
 import {
+    DeleteSavingsGoalDto,
     SavingsCurrency,
     SavingsGoalDto,
     SavingsGoalPayloadDto,
@@ -41,6 +43,11 @@ import {
     isMonthKey,
     toMonthKey,
 } from './helpers/month-rollover';
+import { ChangeCurrencyDto } from './dtos/currency.dto';
+import {
+    convertMainCurrencyAmounts,
+    roundCurrency,
+} from './helpers/currency-conversion';
 
 const SAVINGS_CATEGORY = 'savings';
 
@@ -131,6 +138,91 @@ export class TransactionsService {
         }
 
         return transactions;
+    }
+
+    async changeCurrency(
+        { fromCurrency, toCurrency, conversionRate }: ChangeCurrencyDto,
+        req: AuthenticatedRequest,
+    ) {
+        const userId = this.getUserIdOrThrow(req);
+        const userData = await this.getUserDataOrThrow(userId);
+        const storedCurrency = userData.currency;
+
+        if (storedCurrency && fromCurrency && storedCurrency !== fromCurrency) {
+            throw new ConflictException(
+                'Currency was changed in another session. Refresh and try again',
+            );
+        }
+
+        if (storedCurrency === toCurrency) {
+            return {
+                message: 'Currency is already up to date',
+                updatedInfo: userData,
+            };
+        }
+
+        const sourceCurrency = storedCurrency ?? fromCurrency;
+        const needsConversion =
+            Boolean(sourceCurrency) && sourceCurrency !== toCurrency;
+
+        if (
+            needsConversion &&
+            (!conversionRate ||
+                !Number.isFinite(conversionRate) ||
+                conversionRate <= 0)
+        ) {
+            throw new BadRequestException(
+                'A valid conversion rate is required to change currency',
+            );
+        }
+
+        const converted = needsConversion
+            ? convertMainCurrencyAmounts(userData, conversionRate!)
+            : null;
+        const updateData: Partial<AllTransactionsInfo> = {
+            ...(converted || {}),
+            currency: toCurrency,
+        };
+        const currencyFilter = storedCurrency
+            ? { currency: storedCurrency }
+            : {
+                  $or: [{ currency: { $exists: false } }, { currency: null }],
+              };
+
+        const updateResult = await this.AllTransactionsInfoModel.updateOne(
+            { userId, ...currencyFilter },
+            { $set: updateData },
+        );
+
+        if (updateResult.matchedCount === 0) {
+            const latest = await this.getUserDataOrThrow(userId);
+            if (latest.currency === toCurrency) {
+                return {
+                    message: 'Currency is already up to date',
+                    updatedInfo: latest,
+                };
+            }
+            throw new ConflictException(
+                'Currency was changed in another session. Refresh and try again',
+            );
+        }
+
+        const plainUserData =
+            (
+                userData as AllTransactionsInfo & {
+                    toObject?: () => AllTransactionsInfo;
+                }
+            ).toObject?.() ?? userData;
+
+        return {
+            message: needsConversion
+                ? 'Currency and saved amounts converted'
+                : 'Currency saved',
+            updatedInfo: {
+                ...plainUserData,
+                ...updateData,
+            },
+        };
     }
 
     async newTransaction(
@@ -599,32 +691,111 @@ export class TransactionsService {
         };
     }
 
-    async deleteSavingsGoal(id: string, req: AuthenticatedRequest) {
+    async deleteSavingsGoal(
+        id: string,
+        req: AuthenticatedRequest,
+        {
+            purchasedWithSavings = false,
+            deductions,
+            date,
+        }: DeleteSavingsGoalDto = {},
+    ) {
         const userId = this.getUserIdOrThrow(req);
         const userData = await this.getUserDataOrThrow(userId);
         const goals = (userData.savingsGoals || []) as SavingsGoalDto[];
         const operations = (userData.savingsOperations ||
             []) as SavingsOperationDto[];
 
-        if (!goals.some((goal) => goal.id === id)) {
+        const goal = goals.find((goal) => goal.id === id);
+        if (!goal) {
             throw new BadRequestException('Savings goal not found');
         }
 
         const updatedGoals = goals.filter((goal) => goal.id !== id);
+        let updatedOperations = operations;
+
+        if (purchasedWithSavings) {
+            if (!deductions?.length) {
+                throw new BadRequestException(
+                    'At least one purchase deduction is required',
+                );
+            }
+
+            const groupedDeductions = deductions.reduce(
+                (grouped, deduction) => {
+                    const key = `${deduction.storage}:${deduction.currency}`;
+                    const current = grouped.get(key);
+                    grouped.set(key, {
+                        storage: deduction.storage,
+                        currency: deduction.currency,
+                        amount: roundCurrency(
+                            (current?.amount ?? 0) + deduction.amount,
+                        ),
+                    });
+                    return grouped;
+                },
+                new Map<
+                    string,
+                    {
+                        storage: SavingsStorage;
+                        currency: SavingsCurrency;
+                        amount: number;
+                    }
+                >(),
+            );
+
+            for (const deduction of groupedDeductions.values()) {
+                if (
+                    roundCurrency(
+                        this.getSavingsStorageBalance(
+                            operations,
+                            deduction.storage,
+                            deduction.currency,
+                        ),
+                    ) < deduction.amount
+                ) {
+                    throw new BadRequestException(
+                        'Not enough savings in one of the selected storages or currencies',
+                    );
+                }
+            }
+
+            const purchaseDate = date ?? new Date().toISOString();
+            const purchaseOperations: SavingsOperationDto[] = [
+                ...groupedDeductions.values(),
+            ].map((deduction) => ({
+                id: uuidv4(),
+                type: SavingsOperationType.WITHDRAWAL,
+                storage: deduction.storage,
+                amount: deduction.amount,
+                currency: deduction.currency,
+                date: purchaseDate,
+                note: goal.name,
+            }));
+            updatedOperations = [...purchaseOperations, ...operations];
+        }
+
         await this.AllTransactionsInfoModel.updateOne(
             { userId },
-            { $set: { savingsGoals: updatedGoals } },
+            {
+                $set: {
+                    savingsGoals: updatedGoals,
+                    ...(purchasedWithSavings
+                        ? { savingsOperations: updatedOperations }
+                        : {}),
+                },
+            },
         );
 
         return {
             message: 'Savings goal deleted',
             updatedGoals,
-            updatedOperations: operations,
+            updatedOperations,
         };
     }
 
     async addSavingsOperation(
-        { item, balanceAmount }: SavingsOperationPayloadDto,
+        { item, affectsMainBalance, balanceAmount }: SavingsOperationPayloadDto,
         req: AuthenticatedRequest,
     ) {
         const userId = this.getUserIdOrThrow(req);
@@ -667,7 +838,11 @@ export class TransactionsService {
             totalSpend: userData.totalSpend,
         };
 
-        if (item.type !== SavingsOperationType.TRANSFER) {
+        const shouldAffectMainBalance =
+            item.type !== SavingsOperationType.TRANSFER &&
+            affectsMainBalance !== false;
+
+        if (shouldAffectMainBalance) {
             if (!balanceAmount || balanceAmount <= 0) {
                 throw new BadRequestException(
                     'Main balance amount is required for this savings movement',

@@ -200,6 +200,46 @@ describe('TransactionsService shared savings', () => {
         );
     });
 
+    it('adds external cash savings without changing the main balance', async () => {
+        const { service, transactionsModel } = createService({
+            totalAmount: 200,
+            totalIncome: 200,
+        });
+        const item = {
+            id: 'external-cash',
+            type: SavingsOperationType.DEPOSIT,
+            storage: SavingsStorage.CASH,
+            amount: 1_000,
+            currency: SavingsCurrency.USD,
+            date,
+        };
+
+        const result = await service.addSavingsOperation(
+            { item, affectsMainBalance: false },
+            request,
+        );
+
+        expect(result.updatedOperations).toEqual([item]);
+        expect(result.updatedTransactions).toEqual([]);
+        expect(result.updatedTotals).toEqual({
+            totalAmount: 200,
+            totalIncome: 200,
+            totalSpend: 0,
+        });
+        expect(transactionsModel.updateOne).toHaveBeenCalledWith(
+            { userId: request.userId },
+            {
+                $set: {
+                    savingsOperations: [item],
+                    transactions: [],
+                    totalAmount: 200,
+                    totalIncome: 200,
+                    totalSpend: 0,
+                },
+            },
+        );
+    });
+
     it('uses legacy goal movements as part of the shared balance', async () => {
         const { service } = createService({
             savingsGoals: [],
@@ -283,6 +323,75 @@ describe('TransactionsService shared savings', () => {
                 request,
             ),
         ).rejects.toThrow('Not enough savings in the selected storage');
+    });
+
+    it('does not withdraw one currency from another currency balance', async () => {
+        const { service } = createService({
+            savingsOperations: [
+                {
+                    id: 'cash-uah-deposit',
+                    type: SavingsOperationType.DEPOSIT,
+                    storage: SavingsStorage.CASH,
+                    amount: 10_000,
+                    currency: SavingsCurrency.UAH,
+                    date,
+                },
+            ],
+        });
+
+        await expect(
+            service.addSavingsOperation(
+                {
+                    item: {
+                        id: 'cash-usd-withdrawal',
+                        type: SavingsOperationType.WITHDRAWAL,
+                        storage: SavingsStorage.CASH,
+                        amount: 1,
+                        currency: SavingsCurrency.USD,
+                        date,
+                    },
+                    affectsMainBalance: false,
+                },
+                request,
+            ),
+        ).rejects.toThrow('Not enough savings in the selected storage');
+    });
+
+    it('withdraws external cash without changing the main balance', async () => {
+        const deposit = {
+            id: 'cash-usd-deposit',
+            type: SavingsOperationType.DEPOSIT,
+            storage: SavingsStorage.CASH,
+            amount: 100,
+            currency: SavingsCurrency.USD,
+            date,
+        };
+        const withdrawal = {
+            id: 'cash-usd-withdrawal',
+            type: SavingsOperationType.WITHDRAWAL,
+            storage: SavingsStorage.CASH,
+            amount: 40,
+            currency: SavingsCurrency.USD,
+            date,
+        };
+        const { service } = createService({
+            totalAmount: 200,
+            totalIncome: 200,
+            savingsOperations: [deposit],
+        });
+
+        const result = await service.addSavingsOperation(
+            { item: withdrawal, affectsMainBalance: false },
+            request,
+        );
+
+        expect(result.updatedOperations).toEqual([withdrawal, deposit]);
+        expect(result.updatedTransactions).toEqual([]);
+        expect(result.updatedTotals).toEqual({
+            totalAmount: 200,
+            totalIncome: 200,
+            totalSpend: 0,
+        });
     });
 
     it('moves savings between storages without changing the main balance', async () => {
@@ -503,5 +612,375 @@ describe('TransactionsService shared savings', () => {
             { userId: request.userId },
             { $set: { savingsGoals: [] } },
         );
+    });
+
+    it('deducts a completed goal purchase from the selected savings storage', async () => {
+        const deposit = {
+            id: 'deposit',
+            type: SavingsOperationType.DEPOSIT,
+            storage: SavingsStorage.CARD,
+            amount: 200,
+            currency: SavingsCurrency.USD,
+            date,
+        };
+        const { service, transactionsModel } = createService({
+            savingsGoals: [
+                {
+                    id: 'laptop',
+                    name: 'Laptop',
+                    targetAmount: 150,
+                    currency: SavingsCurrency.USD,
+                    monthlyContribution: 0,
+                    createdAt: date,
+                },
+            ],
+            savingsOperations: [deposit],
+        });
+
+        const result = await service.deleteSavingsGoal('laptop', request, {
+            purchasedWithSavings: true,
+            deductions: [
+                {
+                    storage: SavingsStorage.CARD,
+                    currency: SavingsCurrency.USD,
+                    amount: 150,
+                },
+            ],
+            date,
+        });
+
+        expect(result.updatedGoals).toEqual([]);
+        expect(result.updatedOperations[0]).toEqual(
+            expect.objectContaining({
+                type: SavingsOperationType.WITHDRAWAL,
+                storage: SavingsStorage.CARD,
+                amount: 150,
+                currency: SavingsCurrency.USD,
+                note: 'Laptop',
+            }),
+        );
+        expect(result.updatedOperations[0]).not.toHaveProperty(
+            'linkedTransactionId',
+        );
+        expect(transactionsModel.updateOne).toHaveBeenCalledWith(
+            { userId: request.userId },
+            {
+                $set: {
+                    savingsGoals: [],
+                    savingsOperations: result.updatedOperations,
+                },
+            },
+        );
+    });
+
+    it('supports a purchase split across cash, bank, and currencies', async () => {
+        const { service } = createService({
+            savingsGoals: [
+                {
+                    id: 'trip',
+                    name: 'Trip',
+                    targetAmount: 1000,
+                    currency: SavingsCurrency.EUR,
+                    monthlyContribution: 0,
+                    createdAt: date,
+                },
+            ],
+            savingsOperations: [
+                {
+                    id: 'card-eur',
+                    type: SavingsOperationType.DEPOSIT,
+                    storage: SavingsStorage.CARD,
+                    amount: 800,
+                    currency: SavingsCurrency.EUR,
+                    date,
+                },
+                {
+                    id: 'cash-usd',
+                    type: SavingsOperationType.DEPOSIT,
+                    storage: SavingsStorage.CASH,
+                    amount: 250,
+                    currency: SavingsCurrency.USD,
+                    date,
+                },
+            ],
+        });
+
+        const result = await service.deleteSavingsGoal('trip', request, {
+            purchasedWithSavings: true,
+            deductions: [
+                {
+                    storage: SavingsStorage.CARD,
+                    currency: SavingsCurrency.EUR,
+                    amount: 800,
+                },
+                {
+                    storage: SavingsStorage.CASH,
+                    currency: SavingsCurrency.USD,
+                    amount: 200,
+                },
+            ],
+        });
+
+        expect(result.updatedOperations.slice(0, 2)).toEqual(
+            expect.arrayContaining([
+                expect.objectContaining({
+                    type: SavingsOperationType.WITHDRAWAL,
+                    storage: SavingsStorage.CARD,
+                    currency: SavingsCurrency.EUR,
+                    amount: 800,
+                }),
+                expect.objectContaining({
+                    type: SavingsOperationType.WITHDRAWAL,
+                    storage: SavingsStorage.CASH,
+                    currency: SavingsCurrency.USD,
+                    amount: 200,
+                }),
+            ]),
+        );
+    });
+
+    it('does not delete a purchased goal when a selected source is short', async () => {
+        const { service, transactionsModel } = createService({
+            savingsGoals: [
+                {
+                    id: 'laptop',
+                    name: 'Laptop',
+                    targetAmount: 150,
+                    currency: SavingsCurrency.USD,
+                    monthlyContribution: 0,
+                    createdAt: date,
+                },
+            ],
+            savingsOperations: [
+                {
+                    id: 'cash-deposit',
+                    type: SavingsOperationType.DEPOSIT,
+                    storage: SavingsStorage.CASH,
+                    amount: 200,
+                    currency: SavingsCurrency.USD,
+                    date,
+                },
+            ],
+        });
+
+        await expect(
+            service.deleteSavingsGoal('laptop', request, {
+                purchasedWithSavings: true,
+                deductions: [
+                    {
+                        storage: SavingsStorage.CARD,
+                        currency: SavingsCurrency.USD,
+                        amount: 150,
+                    },
+                ],
+            }),
+        ).rejects.toThrow('Not enough savings in one of the selected');
+        expect(transactionsModel.updateOne).not.toHaveBeenCalled();
+    });
+
+    it('checks duplicate deductions against their combined available balance', async () => {
+        const { service, transactionsModel } = createService({
+            savingsGoals: [
+                {
+                    id: 'phone',
+                    name: 'Phone',
+                    targetAmount: 200,
+                    currency: SavingsCurrency.USD,
+                    monthlyContribution: 0,
+                    createdAt: date,
+                },
+            ],
+            savingsOperations: [
+                {
+                    id: 'card-deposit',
+                    type: SavingsOperationType.DEPOSIT,
+                    storage: SavingsStorage.CARD,
+                    amount: 150,
+                    currency: SavingsCurrency.USD,
+                    date,
+                },
+            ],
+        });
+
+        await expect(
+            service.deleteSavingsGoal('phone', request, {
+                purchasedWithSavings: true,
+                deductions: [
+                    {
+                        storage: SavingsStorage.CARD,
+                        currency: SavingsCurrency.USD,
+                        amount: 100,
+                    },
+                    {
+                        storage: SavingsStorage.CARD,
+                        currency: SavingsCurrency.USD,
+                        amount: 100,
+                    },
+                ],
+            }),
+        ).rejects.toThrow('Not enough savings in one of the selected');
+        expect(transactionsModel.updateOne).not.toHaveBeenCalled();
+    });
+});
+
+describe('TransactionsService currency changes', () => {
+    const request = {
+        userId: '507f1f77bcf86cd799439011',
+    } as AuthenticatedRequest;
+
+    const createService = (overrides: Record<string, any> = {}) => {
+        const userData = {
+            userId: request.userId,
+            currency: SavingsCurrency.UAH,
+            totalAmount: 1000,
+            totalIncome: 1500,
+            totalSpend: 500,
+            nextMonthTotalAmount: 2000,
+            savePercent: 10,
+            lastProcessedMonth: '2026-09',
+            defaultEssentialsArray: [],
+            essentialsArray: [],
+            nextMonthEssentialsArray: [],
+            transactions: [],
+            savingsGoals: [],
+            savingsOperations: [],
+            ...overrides,
+        };
+        const transactionsModel = {
+            findOne: jest.fn().mockResolvedValue(userData),
+            updateOne: jest.fn().mockResolvedValue({ matchedCount: 1 }),
+        };
+        const service = new TransactionsService(
+            {} as never,
+            transactionsModel as never,
+            new CalculationService(),
+        );
+
+        return { service, transactionsModel, userData };
+    };
+
+    it('persists a converted account in one update', async () => {
+        const { service, transactionsModel } = createService({
+            transactions: [
+                {
+                    id: 'expense',
+                    transactionType: TransactionType.EXPENSE,
+                    value: 100,
+                    date: new Date('2026-09-02T00:00:00.000Z'),
+                    categorie: 'groceries',
+                    description: 'Food',
+                },
+            ],
+        });
+
+        const result = await service.changeCurrency(
+            {
+                fromCurrency: SavingsCurrency.UAH,
+                toCurrency: SavingsCurrency.USD,
+                conversionRate: 0.025,
+            },
+            request,
+        );
+
+        expect(result.updatedInfo).toEqual(
+            expect.objectContaining({
+                currency: SavingsCurrency.USD,
+                totalAmount: 25,
+                totalIncome: 37.5,
+                totalSpend: 12.5,
+                nextMonthTotalAmount: 50,
+            }),
+        );
+        expect(result.updatedInfo.transactions[0].value).toBe(2.5);
+        expect(transactionsModel.updateOne).toHaveBeenCalledWith(
+            { userId: request.userId, currency: SavingsCurrency.UAH },
+            {
+                $set: {
+                    currency: SavingsCurrency.USD,
+                    totalAmount: 25,
+                    totalIncome: 37.5,
+                    totalSpend: 12.5,
+                    nextMonthTotalAmount: 50,
+                    defaultEssentialsArray: [],
+                    essentialsArray: [],
+                    nextMonthEssentialsArray: [],
+                    transactions: [
+                        {
+                            id: 'expense',
+                            transactionType: TransactionType.EXPENSE,
+                            value: 2.5,
+                            date: new Date('2026-09-02T00:00:00.000Z'),
+                            categorie: 'groceries',
+                            description: 'Food',
+                        },
+                    ],
+                    savingsOperations: [],
+                },
+            },
+        );
+    });
+
+    it('initializes a legacy account without changing its amounts', async () => {
+        const { service, transactionsModel } = createService({
+            currency: undefined,
+        });
+
+        const result = await service.changeCurrency(
+            {
+                fromCurrency: SavingsCurrency.EUR,
+                toCurrency: SavingsCurrency.EUR,
+            },
+            request,
+        );
+
+        expect(result.updatedInfo).toEqual(
+            expect.objectContaining({
+                currency: SavingsCurrency.EUR,
+                totalAmount: 1000,
+            }),
+        );
+        expect(transactionsModel.updateOne).toHaveBeenCalledWith(
+            {
+                userId: request.userId,
+                $or: [{ currency: { $exists: false } }, { currency: null }],
+            },
+            { $set: { currency: SavingsCurrency.EUR } },
+        );
+    });
+
+    it('rejects a stale source currency without writing', async () => {
+        const { service, transactionsModel } = createService({
+            currency: SavingsCurrency.USD,
+        });
+
+        await expect(
+            service.changeCurrency(
+                {
+                    fromCurrency: SavingsCurrency.UAH,
+                    toCurrency: SavingsCurrency.EUR,
+                    conversionRate: 0.9,
+                },
+                request,
+            ),
+        ).rejects.toThrow('Currency was changed in another session');
+        expect(transactionsModel.updateOne).not.toHaveBeenCalled();
+    });
+
+    it('does not convert an already selected target twice', async () => {
+        const { service, transactionsModel } = createService({
+            currency: SavingsCurrency.USD,
+            totalAmount: 25,
+        });
+
+        const result = await service.changeCurrency(
+            {
+                fromCurrency: SavingsCurrency.USD,
+                toCurrency: SavingsCurrency.USD,
+            },
+            request,
+        );
+
+        expect(result.updatedInfo.totalAmount).toBe(25);
+        expect(transactionsModel.updateOne).not.toHaveBeenCalled();
     });
 });

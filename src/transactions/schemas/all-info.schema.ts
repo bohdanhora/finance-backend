@@ -2,6 +2,7 @@ import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { HydratedDocument } from 'mongoose';
 import { EssentialItemDto } from '../dtos/essential-payments.dto';
 import { TransactionDto } from '../dtos/transaction.dto';
+import { SavingsCurrency } from '../dtos/savings.dto';
 import {
     SavingsGoal,
     SavingsGoalSchema,
@@ -13,6 +14,8 @@ import {
 export class AllTransactionsInfo {
     @Prop({ required: true, unique: true })
     userId: string;
+    @Prop({ enum: SavingsCurrency })
+    currency?: SavingsCurrency;
     @Prop({ required: true })
     totalAmount: number;
     @Prop({ required: true })
