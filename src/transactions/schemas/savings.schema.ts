@@ -59,6 +59,12 @@ export class SavingsOperation {
 
     @Prop({ trim: true, default: '' })
     note?: string;
+
+    @Prop()
+    linkedTransactionId?: string;
+
+    @Prop({ min: 0.01 })
+    balanceAmount?: number;
 }
 
 export const SavingsOperationSchema =

@@ -42,6 +42,8 @@ import {
     toMonthKey,
 } from './helpers/month-rollover';
 
+const SAVINGS_CATEGORY = 'savings';
+
 @Injectable()
 export class TransactionsService {
     constructor(
@@ -143,6 +145,15 @@ export class TransactionsService {
             throw new UnauthorizedException('Transaction data not found');
         }
 
+        if (
+            transaction.transactionType === TransactionType.EXPENSE &&
+            transaction.value > userTransactionsInfo.totalAmount
+        ) {
+            throw new BadRequestException(
+                'Not enough money on the main balance',
+            );
+        }
+
         const updatedTotals = this.calculationService.calculateAllTotals(
             userTransactionsInfo.totalAmount,
             userTransactionsInfo.totalIncome,
@@ -151,7 +162,50 @@ export class TransactionsService {
             transaction.transactionType,
         );
 
-        userTransactionsInfo.transactions.unshift(transaction);
+        if (
+            transaction.transactionType === TransactionType.INCOME &&
+            transaction.categorie === SAVINGS_CATEGORY
+        ) {
+            throw new BadRequestException(
+                'Create savings withdrawals from the savings page',
+            );
+        }
+
+        const transactionToSave: TransactionDto = { ...transaction };
+        const savingsOperations = (userTransactionsInfo.savingsOperations ||
+            []) as SavingsOperationDto[];
+
+        if (
+            transaction.transactionType === TransactionType.EXPENSE &&
+            transaction.categorie === SAVINGS_CATEGORY
+        ) {
+            if (!transaction.savingsStorage || !transaction.savingsCurrency) {
+                throw new BadRequestException(
+                    'Choose where the savings will be stored',
+                );
+            }
+
+            const savingsOperationId = uuidv4();
+            const savingsOperation: SavingsOperationDto = {
+                id: savingsOperationId,
+                type: SavingsOperationType.DEPOSIT,
+                storage: transaction.savingsStorage,
+                amount: transaction.value,
+                currency: transaction.savingsCurrency,
+                date: new Date(transaction.date).toISOString(),
+                note: transaction.description || undefined,
+                linkedTransactionId: transaction.id,
+                balanceAmount: transaction.value,
+            };
+
+            transactionToSave.savingsOperationId = savingsOperationId;
+            userTransactionsInfo.savingsOperations = [
+                savingsOperation,
+                ...savingsOperations,
+            ];
+        }
+
+        userTransactionsInfo.transactions.unshift(transactionToSave);
         Object.assign(userTransactionsInfo, updatedTotals);
 
         await userTransactionsInfo.save();
@@ -160,6 +214,8 @@ export class TransactionsService {
             message: 'Transaction added successfully',
             updatedTotals,
             updatedItems: userTransactionsInfo.transactions,
+            updatedSavingsOperations:
+                userTransactionsInfo.savingsOperations || [],
         };
     }
 
@@ -568,7 +624,7 @@ export class TransactionsService {
     }
 
     async addSavingsOperation(
-        { item }: SavingsOperationPayloadDto,
+        { item, balanceAmount }: SavingsOperationPayloadDto,
         req: AuthenticatedRequest,
     ) {
         const userId = this.getUserIdOrThrow(req);
@@ -603,16 +659,79 @@ export class TransactionsService {
             );
         }
 
-        const updatedOperations = [item, ...operations];
+        let operationToSave = item;
+        let updatedTransactions = userData.transactions || [];
+        let updatedTotals = {
+            totalAmount: userData.totalAmount,
+            totalIncome: userData.totalIncome,
+            totalSpend: userData.totalSpend,
+        };
+
+        if (item.type !== SavingsOperationType.TRANSFER) {
+            if (!balanceAmount || balanceAmount <= 0) {
+                throw new BadRequestException(
+                    'Main balance amount is required for this savings movement',
+                );
+            }
+
+            const transactionType =
+                item.type === SavingsOperationType.DEPOSIT
+                    ? TransactionType.EXPENSE
+                    : TransactionType.INCOME;
+            if (
+                transactionType === TransactionType.EXPENSE &&
+                balanceAmount > userData.totalAmount
+            ) {
+                throw new BadRequestException(
+                    'Not enough money on the main balance',
+                );
+            }
+            updatedTotals = this.calculationService.calculateAllTotals(
+                userData.totalAmount,
+                userData.totalIncome,
+                userData.totalSpend,
+                balanceAmount,
+                transactionType,
+            );
+
+            const transactionId = uuidv4();
+            operationToSave = {
+                ...item,
+                linkedTransactionId: transactionId,
+                balanceAmount,
+            };
+            const linkedTransaction: TransactionDto = {
+                id: transactionId,
+                transactionType,
+                value: balanceAmount,
+                date: new Date(item.date),
+                categorie: SAVINGS_CATEGORY,
+                description: item.note || '',
+                savingsStorage: item.storage,
+                savingsCurrency: item.currency,
+                savingsOperationId: item.id,
+            };
+            updatedTransactions = [linkedTransaction, ...updatedTransactions];
+        }
+
+        const updatedOperations = [operationToSave, ...operations];
         await this.AllTransactionsInfoModel.updateOne(
             { userId },
-            { $set: { savingsOperations: updatedOperations } },
+            {
+                $set: {
+                    savingsOperations: updatedOperations,
+                    transactions: updatedTransactions,
+                    ...updatedTotals,
+                },
+            },
         );
 
         return {
             message: 'Savings operation added',
             updatedGoals: goals,
             updatedOperations,
+            updatedTransactions,
+            updatedTotals,
         };
     }
 
@@ -650,15 +769,69 @@ export class TransactionsService {
             );
         }
 
+        const linkedTransaction = operationToDelete.linkedTransactionId
+            ? (userData.transactions || []).find(
+                  (transaction) =>
+                      transaction.id === operationToDelete.linkedTransactionId,
+              )
+            : undefined;
+        const updatedTransactions = linkedTransaction
+            ? (userData.transactions || []).filter(
+                  (transaction) => transaction.id !== linkedTransaction.id,
+              )
+            : userData.transactions || [];
+
+        let updatedTotals = {
+            totalAmount: userData.totalAmount,
+            totalIncome: userData.totalIncome,
+            totalSpend: userData.totalSpend,
+        };
+        const linkedBalanceAmount =
+            linkedTransaction?.value ?? operationToDelete.balanceAmount;
+
+        if (
+            linkedBalanceAmount &&
+            operationToDelete.type !== SavingsOperationType.TRANSFER
+        ) {
+            const linkedTransactionType =
+                linkedTransaction?.transactionType ??
+                (operationToDelete.type === SavingsOperationType.DEPOSIT
+                    ? TransactionType.EXPENSE
+                    : TransactionType.INCOME);
+            if (
+                linkedTransactionType === TransactionType.INCOME &&
+                linkedBalanceAmount > userData.totalAmount
+            ) {
+                throw new BadRequestException(
+                    'Not enough money on the main balance to reverse this withdrawal',
+                );
+            }
+            updatedTotals = this.calculationService.calculateTotalsAfterDelete(
+                userData.totalAmount,
+                userData.totalIncome,
+                userData.totalSpend,
+                linkedBalanceAmount,
+                linkedTransactionType,
+            );
+        }
+
         await this.AllTransactionsInfoModel.updateOne(
             { userId },
-            { $set: { savingsOperations: updatedOperations } },
+            {
+                $set: {
+                    savingsOperations: updatedOperations,
+                    transactions: updatedTransactions,
+                    ...updatedTotals,
+                },
+            },
         );
 
         return {
             message: 'Savings operation deleted',
             updatedGoals: goals,
             updatedOperations,
+            updatedTransactions,
+            updatedTotals,
         };
     }
 
@@ -667,12 +840,23 @@ export class TransactionsService {
         req: AuthenticatedRequest,
     ) {
         const userId = this.getUserIdOrThrow(req);
-        const userData = clearTotals
-            ? await this.getUserDataOrThrow(userId)
-            : null;
+        const userData = await this.getUserDataOrThrow(userId);
+        const updatedSavingsOperations = (
+            (userData.savingsOperations || []) as SavingsOperationDto[]
+        ).map((operation) => {
+            const documentOperation = operation as SavingsOperationDto & {
+                toObject?: () => SavingsOperationDto;
+            };
+            const plainOperation = documentOperation.toObject?.() ?? operation;
+            const unlinkedOperation = { ...plainOperation };
+            delete unlinkedOperation.linkedTransactionId;
+            delete unlinkedOperation.balanceAmount;
+            return unlinkedOperation;
+        });
 
         const updateData: Partial<AllTransactionsInfo> = {
             transactions: [],
+            savingsOperations: updatedSavingsOperations,
         };
         let essentialsArray: EssentialItemDto[] | undefined;
         let nextMonthEssentialsArray: EssentialItemDto[] | undefined;
@@ -690,9 +874,9 @@ export class TransactionsService {
             updateData.totalIncome = 0;
             updateData.totalSpend = 0;
             updateData.nextMonthTotalAmount = 0;
-            essentialsArray = resetPayments(userData?.essentialsArray);
+            essentialsArray = resetPayments(userData.essentialsArray);
             nextMonthEssentialsArray = resetPayments(
-                userData?.nextMonthEssentialsArray,
+                userData.nextMonthEssentialsArray,
             );
             updateData.essentialsArray = essentialsArray;
             updateData.nextMonthEssentialsArray = nextMonthEssentialsArray;
@@ -709,6 +893,7 @@ export class TransactionsService {
             clearedTotals: clearTotals,
             essentialsArray,
             nextMonthEssentialsArray,
+            updatedSavingsOperations,
         };
     }
 
@@ -764,9 +949,39 @@ export class TransactionsService {
             const newBalance =
                 userTransactionsInfo.totalAmount - transactionToDelete.value;
 
-            if (newBalance <= 0) {
+            if (newBalance < 0) {
                 throw new BadRequestException(
-                    'You cannot delete this income transaction because it would make your balance zero or negative',
+                    'You cannot delete this income transaction because it would make your balance negative',
+                );
+            }
+        }
+
+        const savingsOperations = (userTransactionsInfo.savingsOperations ||
+            []) as SavingsOperationDto[];
+        const linkedSavingsOperation = savingsOperations.find(
+            (operation) =>
+                operation.id === transactionToDelete.savingsOperationId ||
+                operation.linkedTransactionId === transactionId,
+        );
+
+        let updatedSavingsOperations = savingsOperations;
+        if (linkedSavingsOperation) {
+            updatedSavingsOperations = savingsOperations.filter(
+                (operation) => operation.id !== linkedSavingsOperation.id,
+            );
+
+            const leavesNegativeBalance = Object.values(SavingsStorage).some(
+                (storage) =>
+                    this.getSavingsStorageBalance(
+                        updatedSavingsOperations,
+                        storage,
+                        linkedSavingsOperation.currency,
+                    ) < 0,
+            );
+
+            if (leavesNegativeBalance) {
+                throw new BadRequestException(
+                    'This savings transaction cannot be deleted because a later movement depends on it',
                 );
             }
         }
@@ -786,6 +1001,7 @@ export class TransactionsService {
             );
 
         Object.assign(userTransactionsInfo, updatedTotals);
+        userTransactionsInfo.savingsOperations = updatedSavingsOperations;
 
         await userTransactionsInfo.save();
 
@@ -794,6 +1010,7 @@ export class TransactionsService {
             deletedTransactionId: transactionId,
             updatedTotals,
             updatedItems: userTransactionsInfo.transactions,
+            updatedSavingsOperations,
         };
     }
 
@@ -805,6 +1022,8 @@ export class TransactionsService {
             description,
             date,
             categorie,
+            savingsStorage,
+            savingsCurrency,
         }: UpdateTransactionDto,
         req: AuthenticatedRequest,
     ) {
@@ -837,6 +1056,21 @@ export class TransactionsService {
         const oldTransaction =
             userTransactionsInfo.transactions[transactionIndex];
 
+        if (oldTransaction.savingsOperationId) {
+            throw new BadRequestException(
+                'Edit linked savings movements from the savings page',
+            );
+        }
+
+        if (
+            transactionType === TransactionType.INCOME &&
+            categorie === SAVINGS_CATEGORY
+        ) {
+            throw new BadRequestException(
+                'Create savings withdrawals from the savings page',
+            );
+        }
+
         const revertedTotals =
             this.calculationService.calculateTotalsAfterDelete(
                 userTransactionsInfo.totalAmount,
@@ -846,16 +1080,62 @@ export class TransactionsService {
                 oldTransaction.transactionType,
             );
 
+        if (
+            transactionType === TransactionType.EXPENSE &&
+            value > revertedTotals.totalAmount
+        ) {
+            throw new BadRequestException(
+                'Transaction cannot be updated because the main balance would be negative',
+            );
+        }
+
         Object.assign(userTransactionsInfo, revertedTotals);
 
-        userTransactionsInfo.transactions[transactionIndex] = {
+        const updatedTransaction: TransactionDto = {
             ...oldTransaction,
             value,
             transactionType,
             categorie: categorie ?? oldTransaction.categorie,
             description: description ?? oldTransaction.description,
             date: date ?? oldTransaction.date,
+            savingsStorage:
+                categorie === SAVINGS_CATEGORY ? savingsStorage : undefined,
+            savingsCurrency:
+                categorie === SAVINGS_CATEGORY ? savingsCurrency : undefined,
         };
+        const savingsOperations = (userTransactionsInfo.savingsOperations ||
+            []) as SavingsOperationDto[];
+
+        if (
+            transactionType === TransactionType.EXPENSE &&
+            categorie === SAVINGS_CATEGORY
+        ) {
+            if (!savingsStorage || !savingsCurrency) {
+                throw new BadRequestException(
+                    'Choose where the savings will be stored',
+                );
+            }
+
+            const savingsOperationId = uuidv4();
+            updatedTransaction.savingsOperationId = savingsOperationId;
+            userTransactionsInfo.savingsOperations = [
+                {
+                    id: savingsOperationId,
+                    type: SavingsOperationType.DEPOSIT,
+                    storage: savingsStorage,
+                    amount: value,
+                    currency: savingsCurrency,
+                    date: new Date(date).toISOString(),
+                    note: description || undefined,
+                    linkedTransactionId: oldTransaction.id,
+                    balanceAmount: value,
+                },
+                ...savingsOperations,
+            ];
+        }
+
+        userTransactionsInfo.transactions[transactionIndex] =
+            updatedTransaction;
 
         const updatedTotals = this.calculationService.calculateAllTotals(
             userTransactionsInfo.totalAmount,
@@ -864,12 +1144,6 @@ export class TransactionsService {
             value,
             transactionType,
         );
-
-        if (updatedTotals.totalAmount <= 0) {
-            throw new BadRequestException(
-                'Transaction cannot be updated because total would be zero or negative',
-            );
-        }
 
         Object.assign(userTransactionsInfo, updatedTotals);
 
@@ -881,6 +1155,8 @@ export class TransactionsService {
                 userTransactionsInfo.transactions[transactionIndex],
             updatedTotals,
             updatedItems: userTransactionsInfo.transactions,
+            updatedSavingsOperations:
+                userTransactionsInfo.savingsOperations || [],
         };
     }
 }
