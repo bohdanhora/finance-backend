@@ -25,6 +25,9 @@ export class SavingsGoal {
     @Prop()
     targetDate?: string;
 
+    @Prop({ trim: true })
+    url?: string;
+
     @Prop({ required: true })
     createdAt: string;
 }

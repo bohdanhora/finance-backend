@@ -8,6 +8,7 @@ import {
     AllTransactionsInfoSchema,
 } from './schemas/all-info.schema';
 import { CalculationService } from './helpers/calculation.service';
+import { ProductPriceService } from './helpers/product-price.service';
 
 @Module({
     imports: [
@@ -23,6 +24,6 @@ import { CalculationService } from './helpers/calculation.service';
         ]),
     ],
     controllers: [TransactionsController],
-    providers: [TransactionsService, CalculationService],
+    providers: [TransactionsService, CalculationService, ProductPriceService],
 })
 export class TransactionsModule {}

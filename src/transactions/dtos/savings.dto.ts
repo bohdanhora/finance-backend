@@ -9,6 +9,7 @@ import {
     IsNumber,
     IsOptional,
     IsString,
+    Matches,
     MaxLength,
     Min,
     ValidateIf,
@@ -54,6 +55,14 @@ export class SavingsGoalDto {
     @IsOptional()
     @IsDateString()
     targetDate?: string;
+
+    @IsOptional()
+    @IsString()
+    @MaxLength(500)
+    @Matches(/^https?:\/\/\S+$/, {
+        message: 'url must be an http or https link',
+    })
+    url?: string;
 
     @IsDateString()
     createdAt: string;
@@ -159,4 +168,13 @@ export class SavingsOperationPayloadDto {
     @IsNumber()
     @Min(0.01)
     balanceAmount?: number;
+}
+
+export class SavingsPriceQueryDto {
+    @IsString()
+    @MaxLength(500)
+    @Matches(/^https?:\/\/\S+$/, {
+        message: 'url must be an http or https link',
+    })
+    url: string;
 }
