@@ -46,6 +46,11 @@ import {
 import { ChangeCurrencyDto } from './dtos/currency.dto';
 import { StreakVisitDto } from './dtos/streak.dto';
 import {
+    ExpectedIncomePayloadDto,
+    ExpectedIncomeReceivedDto,
+    ExpectedIncomeRecord,
+} from './dtos/expected-income.dto';
+import {
     StreakState,
     registerStreakVisit,
     resolveVisitDay,
@@ -56,6 +61,10 @@ import {
 } from './helpers/currency-conversion';
 
 const SAVINGS_CATEGORY = 'savings';
+const INCOME_CATEGORY = 'income';
+
+const byPayday = (items: ExpectedIncomeRecord[]) =>
+    [...items].sort((a, b) => a.day - b.day);
 
 @Injectable()
 export class TransactionsService {
@@ -107,6 +116,21 @@ export class TransactionsService {
             ...(userData.essentialsArray || []),
             ...(userData.nextMonthEssentialsArray || []),
         ].some((essential) => essential.paymentTransactionId === transactionId);
+    }
+
+    private getExpectedIncomes(
+        userData: AllTransactionsInfo,
+    ): ExpectedIncomeRecord[] {
+        return userData.expectedIncomes || [];
+    }
+
+    private isExpectedIncomeTransaction(
+        userData: AllTransactionsInfo,
+        transactionId: string,
+    ): boolean {
+        return this.getExpectedIncomes(userData).some(
+            (income) => income.transactionId === transactionId,
+        );
     }
 
     async getAllInfo(req: AuthenticatedRequest, requestedMonth?: string) {
@@ -611,6 +635,216 @@ export class TransactionsService {
         };
     }
 
+    async addExpectedIncome(
+        { item }: ExpectedIncomePayloadDto,
+        req: AuthenticatedRequest,
+    ) {
+        const userId = this.getUserIdOrThrow(req);
+        const userData = await this.getUserDataOrThrow(userId);
+        const incomes = this.getExpectedIncomes(userData);
+
+        if (incomes.some((income) => income.id === item.id)) {
+            throw new BadRequestException('Expected income already exists');
+        }
+
+        const updatedItems = byPayday([
+            ...incomes,
+            { ...item, received: false },
+        ]);
+
+        await this.AllTransactionsInfoModel.updateOne(
+            { userId },
+            { $set: { expectedIncomes: updatedItems } },
+        );
+
+        return { message: 'Expected income added', updatedItems };
+    }
+
+    async updateExpectedIncome(
+        { item }: ExpectedIncomePayloadDto,
+        req: AuthenticatedRequest,
+    ) {
+        const userId = this.getUserIdOrThrow(req);
+        const userData = await this.getUserDataOrThrow(userId);
+        const incomes = this.getExpectedIncomes(userData);
+        const currentIncome = incomes.find((income) => income.id === item.id);
+
+        if (!currentIncome) {
+            throw new BadRequestException('Expected income not found');
+        }
+        if (currentIncome.received) {
+            throw new BadRequestException(
+                'Mark the income as not received before editing it',
+            );
+        }
+
+        const updatedItems = byPayday(
+            incomes.map((income) =>
+                income.id === item.id ? { ...item, received: false } : income,
+            ),
+        );
+
+        await this.AllTransactionsInfoModel.updateOne(
+            { userId },
+            { $set: { expectedIncomes: updatedItems } },
+        );
+
+        return { message: 'Expected income updated', updatedItems };
+    }
+
+    async removeExpectedIncome(id: string, req: AuthenticatedRequest) {
+        const userId = this.getUserIdOrThrow(req);
+        const userData = await this.getUserDataOrThrow(userId);
+        const incomes = this.getExpectedIncomes(userData);
+        const currentIncome = incomes.find((income) => income.id === id);
+
+        if (!currentIncome) {
+            throw new BadRequestException('Expected income not found');
+        }
+        if (currentIncome.received) {
+            throw new BadRequestException(
+                'Mark the income as not received before removing it',
+            );
+        }
+
+        const updatedItems = incomes.filter((income) => income.id !== id);
+
+        await this.AllTransactionsInfoModel.updateOne(
+            { userId },
+            { $set: { expectedIncomes: updatedItems } },
+        );
+
+        return { message: 'Expected income removed', updatedItems };
+    }
+
+    /**
+     * Marking an expected income as received works like paying an essential:
+     * the amount that actually arrived becomes a real income transaction, and
+     * undoing it takes exactly that amount back off the balance.
+     */
+    async setExpectedIncomeReceived(
+        {
+            id,
+            received,
+            actualAmount,
+            addToBalance = true,
+        }: ExpectedIncomeReceivedDto,
+        req: AuthenticatedRequest,
+    ) {
+        const userId = this.getUserIdOrThrow(req);
+        const userData = await this.getUserDataOrThrow(userId);
+        const incomes = this.getExpectedIncomes(userData);
+        const incomeIndex = incomes.findIndex((income) => income.id === id);
+
+        if (incomeIndex === -1) {
+            throw new BadRequestException('Expected income not found');
+        }
+
+        const income = incomes[incomeIndex];
+        let updatedTotals = {
+            totalAmount: userData.totalAmount,
+            totalIncome: userData.totalIncome,
+            totalSpend: userData.totalSpend,
+        };
+
+        if (Boolean(income.received) === received) {
+            return {
+                message: 'Expected income unchanged',
+                updatedItems: incomes,
+                updatedTotals,
+                updatedTransactions: userData.transactions,
+            };
+        }
+
+        let updatedIncome: ExpectedIncomeRecord;
+
+        if (received) {
+            if (
+                actualAmount === undefined ||
+                !Number.isFinite(actualAmount) ||
+                actualAmount <= 0
+            ) {
+                throw new BadRequestException(
+                    'Received amount must be greater than zero',
+                );
+            }
+
+            const receivedAt = new Date();
+            updatedIncome = {
+                ...income,
+                received: true,
+                receivedAmount: actualAmount,
+                receivedAt: receivedAt.toISOString(),
+            };
+
+            if (addToBalance) {
+                const transactionId = uuidv4();
+                userData.transactions.unshift({
+                    transactionType: TransactionType.INCOME,
+                    id: transactionId,
+                    value: actualAmount,
+                    date: receivedAt,
+                    categorie: INCOME_CATEGORY,
+                    description: income.title,
+                });
+                updatedTotals = this.calculationService.calculateAllTotals(
+                    userData.totalAmount,
+                    userData.totalIncome,
+                    userData.totalSpend,
+                    actualAmount,
+                    TransactionType.INCOME,
+                );
+                updatedIncome.transactionId = transactionId;
+            }
+        } else {
+            if (income.transactionId) {
+                const transactionIndex = userData.transactions.findIndex(
+                    (transaction) => transaction.id === income.transactionId,
+                );
+                const amount =
+                    transactionIndex >= 0
+                        ? userData.transactions[transactionIndex].value
+                        : (income.receivedAmount ?? 0);
+
+                if (amount > userData.totalAmount) {
+                    throw new BadRequestException(
+                        'Not enough money on the main balance to undo this income',
+                    );
+                }
+
+                updatedTotals =
+                    this.calculationService.calculateTotalsAfterDelete(
+                        userData.totalAmount,
+                        userData.totalIncome,
+                        userData.totalSpend,
+                        amount,
+                        TransactionType.INCOME,
+                    );
+                if (transactionIndex >= 0) {
+                    userData.transactions.splice(transactionIndex, 1);
+                }
+            }
+
+            updatedIncome = { ...income, received: false };
+            delete updatedIncome.receivedAmount;
+            delete updatedIncome.receivedAt;
+            delete updatedIncome.transactionId;
+        }
+
+        const updatedItems = [...incomes];
+        updatedItems[incomeIndex] = updatedIncome;
+        userData.set('expectedIncomes', updatedItems);
+        Object.assign(userData, updatedTotals);
+        await userData.save();
+
+        return {
+            message: 'Expected income updated',
+            updatedItems,
+            updatedTotals,
+            updatedTransactions: userData.transactions,
+        };
+    }
+
     private getSavingsStorageBalance(
         operations: SavingsOperationDto[],
         storage: SavingsStorage,
@@ -1041,6 +1275,7 @@ export class TransactionsService {
         };
         let essentialsArray: EssentialItemDto[] | undefined;
         let nextMonthEssentialsArray: EssentialItemDto[] | undefined;
+        let expectedIncomes: ExpectedIncomeRecord[] | undefined;
 
         if (clearTotals) {
             const resetPayments = (items: EssentialItemDto[] = []) =>
@@ -1061,6 +1296,17 @@ export class TransactionsService {
             );
             updateData.essentialsArray = essentialsArray;
             updateData.nextMonthEssentialsArray = nextMonthEssentialsArray;
+            expectedIncomes = this.getExpectedIncomes(userData).map(
+                (income) => ({
+                    id: income.id,
+                    title: income.title,
+                    amount: income.amount,
+                    day: income.day,
+                    recurring: income.recurring,
+                    received: false,
+                }),
+            );
+            updateData.expectedIncomes = expectedIncomes;
         }
 
         await this.AllTransactionsInfoModel.updateOne(
@@ -1074,6 +1320,7 @@ export class TransactionsService {
             clearedTotals: clearTotals,
             essentialsArray,
             nextMonthEssentialsArray,
+            expectedIncomes,
             updatedSavingsOperations,
         };
     }
@@ -1160,6 +1407,16 @@ export class TransactionsService {
         ) {
             throw new BadRequestException(
                 'Reverse essential payments from the essentials checklist',
+            );
+        }
+        if (
+            this.isExpectedIncomeTransaction(
+                userTransactionsInfo,
+                transactionId,
+            )
+        ) {
+            throw new BadRequestException(
+                'Undo received income from the expected income list',
             );
         }
 
@@ -1268,6 +1525,16 @@ export class TransactionsService {
         ) {
             throw new BadRequestException(
                 'Reverse essential payments from the essentials checklist',
+            );
+        }
+        if (
+            this.isExpectedIncomeTransaction(
+                userTransactionsInfo,
+                transactionId,
+            )
+        ) {
+            throw new BadRequestException(
+                'Undo received income from the expected income list',
             );
         }
 

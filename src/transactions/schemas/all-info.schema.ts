@@ -10,6 +10,8 @@ import {
     SavingsOperationSchema,
 } from './savings.schema';
 import { Streak, StreakSchema } from './streak.schema';
+import { ExpectedIncomeRecord } from '../dtos/expected-income.dto';
+import { MonthSnapshot } from '../helpers/month-rollover';
 
 @Schema()
 export class AllTransactionsInfo {
@@ -35,6 +37,10 @@ export class AllTransactionsInfo {
     essentialsArray: EssentialItemDto[];
     @Prop({ required: true, default: [] })
     nextMonthEssentialsArray: EssentialItemDto[];
+    @Prop({ default: [] })
+    expectedIncomes: ExpectedIncomeRecord[];
+    @Prop({ default: [] })
+    monthHistory: MonthSnapshot[];
     @Prop({ required: true, default: [] })
     transactions: TransactionDto[];
     @Prop({ type: [SavingsGoalSchema], required: true, default: [] })

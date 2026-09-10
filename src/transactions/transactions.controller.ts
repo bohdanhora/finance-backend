@@ -35,6 +35,10 @@ import {
 import { ProductPriceService } from './helpers/product-price.service';
 import { ChangeCurrencyDto } from './dtos/currency.dto';
 import { StreakVisitDto } from './dtos/streak.dto';
+import {
+    ExpectedIncomePayloadDto,
+    ExpectedIncomeReceivedDto,
+} from './dtos/expected-income.dto';
 
 @UseGuards(AuthGuard)
 @Controller('transactions')
@@ -137,6 +141,38 @@ export class TransactionsController {
             updateEssentialData,
             req,
         );
+    }
+
+    @Post('expected-incomes')
+    async addExpectedIncome(
+        @Body() data: ExpectedIncomePayloadDto,
+        @Req() req: AuthenticatedRequest,
+    ) {
+        return this.transactionsService.addExpectedIncome(data, req);
+    }
+
+    @Put('expected-incomes')
+    async updateExpectedIncome(
+        @Body() data: ExpectedIncomePayloadDto,
+        @Req() req: AuthenticatedRequest,
+    ) {
+        return this.transactionsService.updateExpectedIncome(data, req);
+    }
+
+    @Put('expected-incomes/received')
+    async setExpectedIncomeReceived(
+        @Body() data: ExpectedIncomeReceivedDto,
+        @Req() req: AuthenticatedRequest,
+    ) {
+        return this.transactionsService.setExpectedIncomeReceived(data, req);
+    }
+
+    @Delete('expected-incomes/:id')
+    async removeExpectedIncome(
+        @Param('id') id: string,
+        @Req() req: AuthenticatedRequest,
+    ) {
+        return this.transactionsService.removeExpectedIncome(id, req);
     }
 
     @Post('savings/goals')

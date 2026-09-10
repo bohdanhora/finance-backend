@@ -36,6 +36,40 @@ describe('convertMainCurrencyAmounts', () => {
                     },
                 ],
                 nextMonthEssentialsArray: [],
+                expectedIncomes: [
+                    {
+                        id: 'salary',
+                        title: 'Salary',
+                        amount: 40_000,
+                        day: 15,
+                        recurring: true,
+                        received: true,
+                        receivedAmount: 38_500,
+                    },
+                ],
+                monthHistory: [
+                    {
+                        month: '2026-08',
+                        essentials: [
+                            {
+                                id: 'rent',
+                                title: 'Rent',
+                                amount: 700,
+                                checked: true,
+                                paidAmount: 680,
+                            },
+                        ],
+                        expectedIncomes: [
+                            {
+                                id: 'salary',
+                                title: 'Salary',
+                                amount: 40_000,
+                                day: 15,
+                                received: false,
+                            },
+                        ],
+                    },
+                ],
                 transactions: [
                     {
                         id: 'income',
@@ -81,6 +115,19 @@ describe('convertMainCurrencyAmounts', () => {
         expect(converted.essentialsArray[0]).toEqual(
             expect.objectContaining({ amount: 3.09, paidAmount: 3 }),
         );
+        expect(converted.expectedIncomes[0]).toEqual(
+            expect.objectContaining({ amount: 1_000, receivedAmount: 962.5 }),
+        );
+        expect(converted.monthHistory[0].essentials[0]).toEqual(
+            expect.objectContaining({ amount: 17.5, paidAmount: 17 }),
+        );
+        expect(converted.monthHistory[0].expectedIncomes[0]).toEqual({
+            id: 'salary',
+            title: 'Salary',
+            amount: 1_000,
+            day: 15,
+            received: false,
+        });
         expect(converted.transactions[0].value).toBe(8.33);
         expect(converted.savingsOperations[0]).toEqual(
             expect.objectContaining({

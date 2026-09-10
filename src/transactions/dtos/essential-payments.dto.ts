@@ -34,6 +34,11 @@ export class EssentialItemDto {
     @IsOptional()
     @IsString()
     paymentTransactionId?: string;
+
+    /** Month key the bill was left unpaid in before it moved to this month. */
+    @IsOptional()
+    @IsString()
+    carriedFrom?: string;
 }
 
 export enum EssentialsType {

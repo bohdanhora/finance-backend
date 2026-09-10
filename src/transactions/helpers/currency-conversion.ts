@@ -1,6 +1,8 @@
 import { EssentialItemDto } from '../dtos/essential-payments.dto';
+import { ExpectedIncomeRecord } from '../dtos/expected-income.dto';
 import { SavingsOperationDto } from '../dtos/savings.dto';
 import { TransactionDto } from '../dtos/transaction.dto';
+import { MonthSnapshot } from './month-rollover';
 
 export type MainCurrencyAmounts = {
     totalAmount: number;
@@ -10,6 +12,8 @@ export type MainCurrencyAmounts = {
     defaultEssentialsArray: EssentialItemDto[];
     essentialsArray: EssentialItemDto[];
     nextMonthEssentialsArray: EssentialItemDto[];
+    expectedIncomes: ExpectedIncomeRecord[];
+    monthHistory: MonthSnapshot[];
     transactions: TransactionDto[];
     savingsOperations: SavingsOperationDto[];
 };
@@ -40,6 +44,42 @@ const convertEssentials = (
         };
     });
 
+const convertExpectedIncomes = <
+    T extends { amount: number; receivedAmount?: number },
+>(
+    items: T[] = [],
+    rate: number,
+): T[] =>
+    items.map((documentItem) => {
+        const item = toPlain(documentItem);
+        return {
+            ...item,
+            amount: convertValue(item.amount, rate),
+            ...(typeof item.receivedAmount === 'number'
+                ? { receivedAmount: convertValue(item.receivedAmount, rate) }
+                : {}),
+        };
+    });
+
+const convertMonthHistory = (
+    history: MonthSnapshot[] = [],
+    rate: number,
+): MonthSnapshot[] =>
+    history.map((documentEntry) => {
+        const entry = toPlain(documentEntry);
+        return {
+            ...entry,
+            essentials: convertEssentials(
+                entry.essentials as EssentialItemDto[],
+                rate,
+            ),
+            expectedIncomes: convertExpectedIncomes(
+                entry.expectedIncomes,
+                rate,
+            ),
+        };
+    });
+
 /**
  * Converts every value denominated in the account's main currency. Savings
  * goal targets and SavingsOperation.amount deliberately stay untouched: they
@@ -62,6 +102,8 @@ export const convertMainCurrencyAmounts = (
         source.nextMonthEssentialsArray,
         rate,
     ),
+    expectedIncomes: convertExpectedIncomes(source.expectedIncomes, rate),
+    monthHistory: convertMonthHistory(source.monthHistory, rate),
     transactions: (source.transactions || []).map((documentTransaction) => {
         const transaction = toPlain(documentTransaction);
         return {

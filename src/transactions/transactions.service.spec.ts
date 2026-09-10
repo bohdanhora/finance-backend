@@ -115,6 +115,187 @@ describe('TransactionsService essential payments', () => {
     });
 });
 
+describe('TransactionsService expected incomes', () => {
+    const request = {
+        userId: '507f1f77bcf86cd799439011',
+    } as AuthenticatedRequest;
+
+    const createService = (overrides: Record<string, any> = {}) => {
+        const userData: Record<string, any> = {
+            totalAmount: 1_000,
+            totalIncome: 1_000,
+            totalSpend: 0,
+            essentialsArray: [],
+            nextMonthEssentialsArray: [],
+            expectedIncomes: [
+                {
+                    id: 'salary-15',
+                    title: 'Salary',
+                    amount: 40_000,
+                    day: 15,
+                    recurring: true,
+                    received: false,
+                },
+            ],
+            transactions: [],
+            set: jest.fn((field: string, value: unknown) => {
+                userData[field] = value;
+            }),
+            save: jest.fn().mockResolvedValue(undefined),
+            ...overrides,
+        };
+        const transactionsModel = {
+            findOne: jest.fn().mockResolvedValue(userData),
+            updateOne: jest.fn().mockResolvedValue({ acknowledged: true }),
+        };
+        const service = new TransactionsService(
+            {} as never,
+            transactionsModel as never,
+            new CalculationService(),
+        );
+
+        return { service, transactionsModel, userData };
+    };
+
+    it('turns a received income into a real transaction and undoes exactly that', async () => {
+        const { service, userData } = createService();
+
+        const received = await service.setExpectedIncomeReceived(
+            { id: 'salary-15', received: true, actualAmount: 38_500 },
+            request,
+        );
+
+        expect(received.updatedTotals).toEqual({
+            totalAmount: 39_500,
+            totalIncome: 39_500,
+            totalSpend: 0,
+        });
+        expect(received.updatedItems[0]).toEqual(
+            expect.objectContaining({
+                received: true,
+                amount: 40_000,
+                receivedAmount: 38_500,
+            }),
+        );
+        expect(received.updatedTransactions[0]).toEqual(
+            expect.objectContaining({
+                transactionType: TransactionType.INCOME,
+                value: 38_500,
+                categorie: 'income',
+                description: 'Salary',
+            }),
+        );
+
+        await expect(
+            service.deleteTransaction(
+                { transactionId: received.updatedItems[0].transactionId! },
+                request,
+            ),
+        ).rejects.toThrow('Undo received income');
+
+        const undone = await service.setExpectedIncomeReceived(
+            { id: 'salary-15', received: false },
+            request,
+        );
+
+        expect(undone.updatedTotals).toEqual({
+            totalAmount: 1_000,
+            totalIncome: 1_000,
+            totalSpend: 0,
+        });
+        expect(undone.updatedItems[0]).toEqual({
+            id: 'salary-15',
+            title: 'Salary',
+            amount: 40_000,
+            day: 15,
+            recurring: true,
+            received: false,
+        });
+        expect(userData.transactions).toHaveLength(0);
+    });
+
+    it('can mark income as received without touching the balance', async () => {
+        const { service } = createService();
+
+        const result = await service.setExpectedIncomeReceived(
+            {
+                id: 'salary-15',
+                received: true,
+                actualAmount: 40_000,
+                addToBalance: false,
+            },
+            request,
+        );
+
+        expect(result.updatedTotals.totalAmount).toBe(1_000);
+        expect(result.updatedTransactions).toHaveLength(0);
+        expect(result.updatedItems[0]).not.toHaveProperty('transactionId');
+
+        const undone = await service.setExpectedIncomeReceived(
+            { id: 'salary-15', received: false },
+            request,
+        );
+        expect(undone.updatedTotals.totalAmount).toBe(1_000);
+    });
+
+    it('refuses to undo income that has already been spent', async () => {
+        const { service, userData } = createService();
+
+        await service.setExpectedIncomeReceived(
+            { id: 'salary-15', received: true, actualAmount: 40_000 },
+            request,
+        );
+        userData.totalAmount = 500;
+
+        await expect(
+            service.setExpectedIncomeReceived(
+                { id: 'salary-15', received: false },
+                request,
+            ),
+        ).rejects.toThrow('Not enough money on the main balance');
+    });
+
+    it('keeps the list in payday order and locks received items', async () => {
+        const { service, transactionsModel, userData } = createService();
+
+        const added = await service.addExpectedIncome(
+            {
+                item: {
+                    id: 'advance-1',
+                    title: 'Advance',
+                    amount: 20_000,
+                    day: 1,
+                    recurring: true,
+                },
+            },
+            request,
+        );
+
+        expect(added.updatedItems.map((income) => income.id)).toEqual([
+            'advance-1',
+            'salary-15',
+        ]);
+        expect(transactionsModel.updateOne).toHaveBeenCalledWith(
+            { userId: request.userId },
+            { $set: { expectedIncomes: added.updatedItems } },
+        );
+
+        userData.expectedIncomes = [
+            {
+                id: 'salary-15',
+                title: 'Salary',
+                amount: 40_000,
+                day: 15,
+                recurring: true,
+                received: true,
+            },
+        ];
+        await expect(
+            service.removeExpectedIncome('salary-15', request),
+        ).rejects.toThrow('Mark the income as not received');
+    });
+});
+
 describe('TransactionsService shared savings', () => {
     const request = {
         userId: '507f1f77bcf86cd799439011',
@@ -904,6 +1085,8 @@ describe('TransactionsService currency changes', () => {
                     defaultEssentialsArray: [],
                     essentialsArray: [],
                     nextMonthEssentialsArray: [],
+                    expectedIncomes: [],
+                    monthHistory: [],
                     transactions: [
                         {
                             id: 'expense',
