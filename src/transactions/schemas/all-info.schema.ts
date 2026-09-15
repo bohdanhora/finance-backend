@@ -12,6 +12,8 @@ import {
 import { Streak, StreakSchema } from './streak.schema';
 import { ExpectedIncomeRecord } from '../dtos/expected-income.dto';
 import { MonthSnapshot } from '../helpers/month-rollover';
+import { AssistantPreferences } from '../dtos/connections.dto';
+import { EncryptedSecret } from '../helpers/secret-cipher';
 
 @Schema()
 export class AllTransactionsInfo {
@@ -49,6 +51,10 @@ export class AllTransactionsInfo {
     savingsOperations: SavingsOperation[];
     @Prop({ type: StreakSchema })
     streak?: Streak;
+    @Prop({ type: Object })
+    assistantPreferences?: AssistantPreferences;
+    @Prop({ type: Object, select: false })
+    monobankToken?: EncryptedSecret;
 }
 
 export type AllTransactionsInfoDocument = HydratedDocument<AllTransactionsInfo>;

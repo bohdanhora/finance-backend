@@ -11,6 +11,9 @@ export default () => ({
             10,
         ),
     },
+    connections: {
+        secret: process.env.CONNECTIONS_SECRET || process.env.JWT_SECRET,
+    },
     database: {
         connectionString: process.env.MONGO_URL,
     },

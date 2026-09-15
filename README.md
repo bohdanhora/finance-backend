@@ -107,6 +107,7 @@ The API starts at [http://localhost:8000](http://localhost:8000) by default. Con
 | `JWT_SECRET` | - | Secret used to sign and verify access tokens. Required. |
 | `JWT_ACCESS_TOKEN_TTL` | `1h` | Access-token lifetime accepted by `jsonwebtoken`. |
 | `JWT_REFRESH_TOKEN_TTL_DAYS` | `3` | Refresh-token lifetime in days. |
+| `CONNECTIONS_SECRET` | `JWT_SECRET` | Encrypts the Monobank tokens saved to accounts. Changing it makes saved tokens unreadable, so users connect again. |
 | `GOOGLE_CLIENT_ID` | - | Google OAuth client ID. |
 | `GOOGLE_CLIENT_SECRET` | - | Google OAuth client secret. |
 | `GOOGLE_CALLBACK_URL` | - | OAuth redirect URI, for example `http://localhost:8000/auth/google/redirect`. |
