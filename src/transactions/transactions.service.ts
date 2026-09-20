@@ -312,7 +312,7 @@ export class TransactionsService {
                 id: savingsOperationId,
                 type: SavingsOperationType.DEPOSIT,
                 storage: transaction.savingsStorage,
-                amount: transaction.value,
+                amount: transaction.savingsAmount ?? transaction.value,
                 currency: transaction.savingsCurrency,
                 date: new Date(transaction.date).toISOString(),
                 note: transaction.description || undefined,
@@ -1499,6 +1499,7 @@ export class TransactionsService {
             categorie,
             savingsStorage,
             savingsCurrency,
+            savingsAmount,
         }: UpdateTransactionDto,
         req: AuthenticatedRequest,
     ) {
@@ -1587,6 +1588,8 @@ export class TransactionsService {
                 categorie === SAVINGS_CATEGORY ? savingsStorage : undefined,
             savingsCurrency:
                 categorie === SAVINGS_CATEGORY ? savingsCurrency : undefined,
+            savingsAmount:
+                categorie === SAVINGS_CATEGORY ? savingsAmount : undefined,
         };
         const savingsOperations = (userTransactionsInfo.savingsOperations ||
             []) as SavingsOperationDto[];
@@ -1608,7 +1611,7 @@ export class TransactionsService {
                     id: savingsOperationId,
                     type: SavingsOperationType.DEPOSIT,
                     storage: savingsStorage,
-                    amount: value,
+                    amount: savingsAmount ?? value,
                     currency: savingsCurrency,
                     date: new Date(date).toISOString(),
                     note: description || undefined,

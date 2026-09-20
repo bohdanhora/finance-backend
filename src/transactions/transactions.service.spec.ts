@@ -664,6 +664,36 @@ describe('TransactionsService shared savings', () => {
         expect(userData.save).toHaveBeenCalledTimes(1);
     });
 
+    it('deposits the converted amount when savings are kept in another currency', async () => {
+        const { service } = createService({});
+
+        const result = await service.newTransaction(
+            {
+                id: 'expense-2',
+                transactionType: TransactionType.EXPENSE,
+                value: 41_000,
+                date: new Date(date),
+                categorie: 'savings',
+                description: 'Dollars under the pillow',
+                savingsStorage: SavingsStorage.CASH,
+                savingsCurrency: SavingsCurrency.USD,
+                savingsAmount: 1_000,
+            },
+            request,
+        );
+
+        expect(result.updatedTotals.totalAmount).toBe(459_000);
+        expect(result.updatedSavingsOperations[0]).toEqual(
+            expect.objectContaining({
+                type: SavingsOperationType.DEPOSIT,
+                storage: SavingsStorage.CASH,
+                currency: SavingsCurrency.USD,
+                amount: 1_000,
+                balanceAmount: 41_000,
+            }),
+        );
+    });
+
     it('deletes a linked savings deposit and its balance expense together', async () => {
         const linkedOperation = {
             id: 'deposit-1',

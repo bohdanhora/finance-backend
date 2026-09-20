@@ -2,6 +2,7 @@ import {
     IsDateString,
     IsEnum,
     IsNumber,
+    IsOptional,
     IsString,
     Min,
     ValidateIf,
@@ -39,4 +40,10 @@ export class UpdateTransactionDto {
     )
     @IsEnum(SavingsCurrency)
     savingsCurrency?: SavingsCurrency;
+
+    /** Amount added to savings, in savingsCurrency, when it differs from the balance currency. */
+    @IsOptional()
+    @IsNumber()
+    @Min(0.01)
+    savingsAmount?: number;
 }
