@@ -11,6 +11,8 @@ import { CalculationService } from './helpers/calculation.service';
 import { ProductPriceService } from './helpers/product-price.service';
 import { ConnectionsController } from './connections.controller';
 import { ConnectionsService } from './connections.service';
+import { CardsController } from './cards.controller';
+import { CardsService } from './cards.service';
 
 @Module({
     imports: [
@@ -25,10 +27,15 @@ import { ConnectionsService } from './connections.service';
             },
         ]),
     ],
-    controllers: [ConnectionsController, TransactionsController],
+    controllers: [
+        ConnectionsController,
+        CardsController,
+        TransactionsController,
+    ],
     providers: [
         TransactionsService,
         ConnectionsService,
+        CardsService,
         CalculationService,
         ProductPriceService,
     ],
