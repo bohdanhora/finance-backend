@@ -54,6 +54,12 @@ export class AuthController {
     }
 
     @UseGuards(AuthGuard)
+    @Get('account')
+    async getAccount(@Req() req: RequestWithUserId) {
+        return this.authService.getAccount(req.userId);
+    }
+
+    @UseGuards(AuthGuard)
     @Put('change-password')
     async changePassword(
         @Body() changePasswordData: ChangePasswordDto,

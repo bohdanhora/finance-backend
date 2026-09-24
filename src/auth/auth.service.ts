@@ -173,12 +173,30 @@ export class AuthService {
         );
     }
 
+    async getAccount(userId: string) {
+        if (!Types.ObjectId.isValid(userId)) {
+            throw new BadRequestException('Invalid userId format');
+        }
+
+        const user = await this.UserModel.findById(userId);
+        if (!user) {
+            throw new NotFoundException('User not found');
+        }
+
+        return {
+            name: user.name,
+            email: user.email,
+            registeredVia: user.registeredVia,
+            hasPassword: Boolean(user.password),
+        };
+    }
+
     async changePassword(
         userId: string,
         {
             oldPassword,
             newPassword,
-        }: { oldPassword: string; newPassword: string },
+        }: { oldPassword?: string; newPassword: string },
     ) {
         if (!Types.ObjectId.isValid(userId)) {
             throw new BadRequestException('Invalid userId format');
@@ -189,18 +207,25 @@ export class AuthService {
             throw new NotFoundException('User not found');
         }
 
-        if (!user.password) {
-            throw new UnauthorizedException('Password missing');
-        }
-        const isCompare = await bcrypt.compare(oldPassword, user.password);
-        if (!isCompare) {
-            throw new UnauthorizedException('Wrong credentials');
+        if (user.password) {
+            if (!oldPassword) {
+                throw new BadRequestException('Current password is required');
+            }
+
+            const isCompare = await bcrypt.compare(oldPassword, user.password);
+            if (!isCompare) {
+                throw new BadRequestException('Wrong current password');
+            }
         }
 
-        const newHashedPassword = await bcrypt.hash(newPassword, 10);
-        user.password = newHashedPassword;
+        const created = !user.password;
+        user.password = await bcrypt.hash(newPassword, 10);
 
         await user.save();
+
+        return {
+            message: created ? 'Password created' : 'Password changed',
+        };
     }
 
     async forgotPassword({ email }: { email: string }) {
