@@ -3,8 +3,10 @@ import { ExpectedIncomeRecord } from '../dtos/expected-income.dto';
 import { SavingsOperationDto } from '../dtos/savings.dto';
 import { TransactionDto } from '../dtos/transaction.dto';
 import { MonthSnapshot } from './month-rollover';
+import type { CardRecord } from './cards';
 
 export type MainCurrencyAmounts = {
+    cards?: CardRecord[];
     totalAmount: number;
     totalIncome: number;
     totalSpend: number;
@@ -85,7 +87,33 @@ const convertMonthHistory = (
  * goal targets and SavingsOperation.amount deliberately stay untouched: they
  * describe real holdings in their own explicitly stored currency.
  */
+const convertCards = (cards: CardRecord[], rate: number): CardRecord[] =>
+    cards.map((documentCard) => {
+        const card = toPlain(documentCard);
+        return { ...card, balance: convertValue(card.balance, rate) };
+    });
+
 export const convertMainCurrencyAmounts = (
+    source: MainCurrencyAmounts,
+    rate: number,
+): MainCurrencyAmounts => {
+    const converted = convertAmounts(source, rate);
+
+    if (!source.cards?.length) {
+        return converted;
+    }
+
+    const cards = convertCards(source.cards, rate);
+    return {
+        ...converted,
+        cards,
+        totalAmount: roundCurrency(
+            cards.reduce((total, card) => total + card.balance, 0),
+        ),
+    };
+};
+
+const convertAmounts = (
     source: MainCurrencyAmounts,
     rate: number,
 ): MainCurrencyAmounts => ({

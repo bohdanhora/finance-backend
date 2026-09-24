@@ -25,6 +25,10 @@ export class UpdateTransactionDto {
     @IsString()
     categorie: string;
 
+    @IsOptional()
+    @IsString()
+    cardId?: string;
+
     @ValidateIf(
         (transaction: UpdateTransactionDto) =>
             transaction.transactionType === TransactionType.EXPENSE &&

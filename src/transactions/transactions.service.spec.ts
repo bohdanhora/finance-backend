@@ -245,6 +245,7 @@ describe('TransactionsService expected incomes', () => {
             { id: 'salary-15', received: true, actualAmount: 40_000 },
             request,
         );
+        (userData.cards as { balance: number }[])[0].balance = 500;
         userData.totalAmount = 500;
 
         await expect(
@@ -252,7 +253,7 @@ describe('TransactionsService expected incomes', () => {
                 { id: 'salary-15', received: false },
                 request,
             ),
-        ).rejects.toThrow('Not enough money on the main balance');
+        ).rejects.toThrow('Not enough money on the card to undo this income');
     });
 
     it('keeps the list in payday order and locks received items', async () => {
@@ -373,6 +374,7 @@ describe('TransactionsService shared savings', () => {
                 $set: {
                     savingsOperations: result.updatedOperations,
                     transactions: result.updatedTransactions,
+                    cards: result.updatedCards,
                     totalAmount: 200_000,
                     totalIncome: 500_000,
                     totalSpend: 300_000,
@@ -413,6 +415,7 @@ describe('TransactionsService shared savings', () => {
                 $set: {
                     savingsOperations: [item],
                     transactions: [],
+                    cards: [expect.objectContaining({ balance: 200 })],
                     totalAmount: 200,
                     totalIncome: 200,
                     totalSpend: 0,
@@ -629,7 +632,7 @@ describe('TransactionsService shared savings', () => {
                 },
                 request,
             ),
-        ).rejects.toThrow('Not enough money on the main balance');
+        ).rejects.toThrow('Not enough money on this card');
     });
 
     it('turns a savings expense into a linked deposit', async () => {
@@ -741,6 +744,7 @@ describe('TransactionsService shared savings', () => {
                 $set: {
                     savingsOperations: [],
                     transactions: [],
+                    cards: [expect.objectContaining({ balance: 500 })],
                     totalAmount: 500,
                     totalIncome: 500,
                     totalSpend: 0,
@@ -1108,6 +1112,7 @@ describe('TransactionsService currency changes', () => {
             {
                 $set: {
                     currency: SavingsCurrency.USD,
+                    cards: [expect.objectContaining({ balance: 25 })],
                     totalAmount: 25,
                     totalIncome: 37.5,
                     totalSpend: 12.5,
@@ -1125,6 +1130,7 @@ describe('TransactionsService currency changes', () => {
                             date: new Date('2026-09-02T00:00:00.000Z'),
                             categorie: 'groceries',
                             description: 'Food',
+                            cardId: expect.any(String) as string,
                         },
                     ],
                     savingsOperations: [],

@@ -59,6 +59,15 @@ import {
     convertMainCurrencyAmounts,
     roundCurrency,
 } from './helpers/currency-conversion';
+import {
+    CardRecord,
+    buildCardsMigration,
+    changeCardBalance,
+    ensureCardFunds,
+    findCard,
+    plainCards,
+    sumCards,
+} from './helpers/cards';
 
 const SAVINGS_CATEGORY = 'savings';
 const INCOME_CATEGORY = 'income';
@@ -106,6 +115,34 @@ export class TransactionsService {
             throw new BadRequestException('User data not found');
         }
         return userData;
+    }
+
+    private prepareCards(userData: {
+        cards?: CardRecord[];
+        totalAmount: number;
+        transactions: TransactionDto[];
+    }): CardRecord[] {
+        const migration = buildCardsMigration(userData);
+
+        if (migration) {
+            userData.cards = migration.cards;
+            if (migration.transactions) {
+                userData.transactions = migration.transactions;
+            }
+        }
+
+        return plainCards(userData.cards);
+    }
+
+    private moveCardMoney(
+        cards: CardRecord[],
+        cardId: string,
+        amount: number,
+        type: TransactionType,
+        reverse = false,
+    ): CardRecord[] {
+        const incoming = (type === TransactionType.INCOME) !== reverse;
+        return changeCardBalance(cards, cardId, incoming ? amount : -amount);
     }
 
     private isEssentialPaymentTransaction(
@@ -162,8 +199,19 @@ export class TransactionsService {
             currentMonth,
         );
 
-        if (rolloverUpdate) {
-            transactions.set(rolloverUpdate);
+        const cardsMigration = buildCardsMigration(transactions);
+
+        if (cardsMigration) {
+            transactions.set({
+                ...cardsMigration,
+                totalAmount: sumCards(cardsMigration.cards),
+            });
+        }
+
+        if (rolloverUpdate || cardsMigration) {
+            if (rolloverUpdate) {
+                transactions.set(rolloverUpdate);
+            }
             await transactions.save();
         }
 
@@ -206,8 +254,16 @@ export class TransactionsService {
             );
         }
 
+        const cards = this.prepareCards(userData);
         const converted = needsConversion
-            ? convertMainCurrencyAmounts(userData, conversionRate!)
+            ? convertMainCurrencyAmounts(
+                  {
+                      ...(userData.toObject?.() ?? userData),
+                      cards,
+                      transactions: userData.transactions,
+                  },
+                  conversionRate!,
+              )
             : null;
         const updateData: Partial<AllTransactionsInfo> = {
             ...(converted || {}),
@@ -267,22 +323,35 @@ export class TransactionsService {
             throw new UnauthorizedException('Transaction data not found');
         }
 
-        if (
-            transaction.transactionType === TransactionType.EXPENSE &&
-            transaction.value > userTransactionsInfo.totalAmount
-        ) {
+        if (transaction.transactionType === TransactionType.TRANSFER) {
             throw new BadRequestException(
-                'Not enough money on the main balance',
+                'Move money between cards with a transfer',
             );
         }
 
-        const updatedTotals = this.calculationService.calculateAllTotals(
-            userTransactionsInfo.totalAmount,
-            userTransactionsInfo.totalIncome,
-            userTransactionsInfo.totalSpend,
+        const cards = this.prepareCards(userTransactionsInfo);
+        const card = findCard(cards, transaction.cardId);
+
+        if (transaction.transactionType === TransactionType.EXPENSE) {
+            ensureCardFunds(card, transaction.value);
+        }
+
+        const updatedCards = this.moveCardMoney(
+            cards,
+            card.id,
             transaction.value,
             transaction.transactionType,
         );
+        const updatedTotals = {
+            ...this.calculationService.calculateAllTotals(
+                userTransactionsInfo.totalAmount,
+                userTransactionsInfo.totalIncome,
+                userTransactionsInfo.totalSpend,
+                transaction.value,
+                transaction.transactionType,
+            ),
+            totalAmount: sumCards(updatedCards),
+        };
 
         if (
             transaction.transactionType === TransactionType.INCOME &&
@@ -293,7 +362,10 @@ export class TransactionsService {
             );
         }
 
-        const transactionToSave: TransactionDto = { ...transaction };
+        const transactionToSave: TransactionDto = {
+            ...transaction,
+            cardId: card.id,
+        };
         const savingsOperations = (userTransactionsInfo.savingsOperations ||
             []) as SavingsOperationDto[];
 
@@ -328,6 +400,7 @@ export class TransactionsService {
         }
 
         userTransactionsInfo.transactions.unshift(transactionToSave);
+        userTransactionsInfo.cards = updatedCards;
         Object.assign(userTransactionsInfo, updatedTotals);
 
         await userTransactionsInfo.save();
@@ -335,6 +408,7 @@ export class TransactionsService {
         return {
             message: 'Transaction added successfully',
             updatedTotals,
+            updatedCards,
             updatedItems: userTransactionsInfo.transactions,
             updatedSavingsOperations:
                 userTransactionsInfo.savingsOperations || [],
@@ -342,20 +416,39 @@ export class TransactionsService {
     }
 
     async setTotalAmount(
-        { totalAmount }: TotalAmountDto,
+        { totalAmount, cardId }: TotalAmountDto,
         req: AuthenticatedRequest,
     ) {
         const userId = this.getUserIdOrThrow(req);
+        const userData = await this.getUserDataOrThrow(userId);
+        const cards = this.prepareCards(userData);
+        const card = findCard(cards, cardId);
+        const otherCards = cards.filter((item) => item.id !== card.id);
+        const balance = cardId
+            ? totalAmount
+            : totalAmount - sumCards(otherCards);
+        const updatedCards = changeCardBalance(
+            cards,
+            card.id,
+            balance - card.balance,
+        );
+        const updatedTotal = sumCards(updatedCards);
 
         await this.AllTransactionsInfoModel.updateOne(
             { userId },
-            { $set: { totalAmount } },
-            { upsert: true },
+            {
+                $set: {
+                    cards: updatedCards,
+                    transactions: userData.transactions,
+                    totalAmount: updatedTotal,
+                },
+            },
         );
 
         return {
             message: 'Total amount updated',
-            totalAmount,
+            totalAmount: updatedTotal,
+            updatedCards,
         };
     }
 
@@ -420,6 +513,7 @@ export class TransactionsService {
         }
 
         const essential = currentItems[essentialIndex];
+        const cards = this.prepareCards(userData);
         const currentTotals = {
             totalAmount: userData.totalAmount,
             totalIncome: userData.totalIncome,
@@ -432,11 +526,13 @@ export class TransactionsService {
                 updatedItems: currentItems,
                 updatedTotals: currentTotals,
                 updatedTransactions: userData.transactions,
+                updatedCards: cards,
             };
         }
 
         let updatedEssential: EssentialItemDto;
         let updatedTotals = currentTotals;
+        let updatedCards = cards;
 
         if (item.checked) {
             if (
@@ -448,11 +544,8 @@ export class TransactionsService {
                     'Actual payment amount must be greater than zero',
                 );
             }
-            if (item.actualAmount > userData.totalAmount) {
-                throw new BadRequestException(
-                    'Not enough funds in the main balance',
-                );
-            }
+            const card = findCard(cards, item.cardId);
+            ensureCardFunds(card, item.actualAmount);
 
             const transactionId = uuidv4();
             const paidAt = new Date();
@@ -463,15 +556,25 @@ export class TransactionsService {
                 date: paidAt,
                 categorie: 'essentials',
                 description: essential.title,
+                cardId: card.id,
             };
 
-            updatedTotals = this.calculationService.calculateAllTotals(
-                userData.totalAmount,
-                userData.totalIncome,
-                userData.totalSpend,
+            updatedCards = this.moveCardMoney(
+                cards,
+                card.id,
                 item.actualAmount,
                 TransactionType.EXPENSE,
             );
+            updatedTotals = {
+                ...this.calculationService.calculateAllTotals(
+                    userData.totalAmount,
+                    userData.totalIncome,
+                    userData.totalSpend,
+                    item.actualAmount,
+                    TransactionType.EXPENSE,
+                ),
+                totalAmount: sumCards(updatedCards),
+            };
             userData.transactions.unshift(transaction);
             updatedEssential = {
                 ...essential,
@@ -490,27 +593,45 @@ export class TransactionsService {
 
             if (transactionIndex >= 0) {
                 const transaction = userData.transactions[transactionIndex];
-                updatedTotals =
-                    this.calculationService.calculateTotalsAfterDelete(
+                updatedCards = this.moveCardMoney(
+                    cards,
+                    findCard(cards, transaction.cardId).id,
+                    transaction.value,
+                    transaction.transactionType,
+                    true,
+                );
+                updatedTotals = {
+                    ...this.calculationService.calculateTotalsAfterDelete(
                         userData.totalAmount,
                         userData.totalIncome,
                         userData.totalSpend,
                         transaction.value,
                         transaction.transactionType,
-                    );
+                    ),
+                    totalAmount: sumCards(updatedCards),
+                };
                 userData.transactions.splice(transactionIndex, 1);
             } else if (
                 essential.paymentTransactionId &&
                 essential.paidAmount !== undefined
             ) {
-                updatedTotals =
-                    this.calculationService.calculateTotalsAfterDelete(
+                updatedCards = this.moveCardMoney(
+                    cards,
+                    findCard(cards).id,
+                    essential.paidAmount,
+                    TransactionType.EXPENSE,
+                    true,
+                );
+                updatedTotals = {
+                    ...this.calculationService.calculateTotalsAfterDelete(
                         userData.totalAmount,
                         userData.totalIncome,
                         userData.totalSpend,
                         essential.paidAmount,
                         TransactionType.EXPENSE,
-                    );
+                    ),
+                    totalAmount: sumCards(updatedCards),
+                };
             }
 
             updatedEssential = { ...essential, checked: false };
@@ -522,6 +643,7 @@ export class TransactionsService {
         const updatedItems = [...currentItems];
         updatedItems[essentialIndex] = updatedEssential;
         userData.set(updateFieldName, updatedItems);
+        userData.cards = updatedCards;
         Object.assign(userData, updatedTotals);
         await userData.save();
 
@@ -530,6 +652,7 @@ export class TransactionsService {
             updatedItems,
             updatedTotals,
             updatedTransactions: userData.transactions,
+            updatedCards,
         };
     }
 
@@ -728,6 +851,7 @@ export class TransactionsService {
             received,
             actualAmount,
             addToBalance = true,
+            cardId,
         }: ExpectedIncomeReceivedDto,
         req: AuthenticatedRequest,
     ) {
@@ -741,6 +865,8 @@ export class TransactionsService {
         }
 
         const income = incomes[incomeIndex];
+        const cards = this.prepareCards(userData);
+        let updatedCards = cards;
         let updatedTotals = {
             totalAmount: userData.totalAmount,
             totalIncome: userData.totalIncome,
@@ -753,6 +879,7 @@ export class TransactionsService {
                 updatedItems: incomes,
                 updatedTotals,
                 updatedTransactions: userData.transactions,
+                updatedCards,
             };
         }
 
@@ -778,6 +905,7 @@ export class TransactionsService {
             };
 
             if (addToBalance) {
+                const card = findCard(cards, cardId);
                 const transactionId = uuidv4();
                 userData.transactions.unshift({
                     transactionType: TransactionType.INCOME,
@@ -786,14 +914,24 @@ export class TransactionsService {
                     date: receivedAt,
                     categorie: INCOME_CATEGORY,
                     description: income.title,
+                    cardId: card.id,
                 });
-                updatedTotals = this.calculationService.calculateAllTotals(
-                    userData.totalAmount,
-                    userData.totalIncome,
-                    userData.totalSpend,
+                updatedCards = this.moveCardMoney(
+                    cards,
+                    card.id,
                     actualAmount,
                     TransactionType.INCOME,
                 );
+                updatedTotals = {
+                    ...this.calculationService.calculateAllTotals(
+                        userData.totalAmount,
+                        userData.totalIncome,
+                        userData.totalSpend,
+                        actualAmount,
+                        TransactionType.INCOME,
+                    ),
+                    totalAmount: sumCards(updatedCards),
+                };
                 updatedIncome.transactionId = transactionId;
             }
         } else {
@@ -805,21 +943,36 @@ export class TransactionsService {
                     transactionIndex >= 0
                         ? userData.transactions[transactionIndex].value
                         : (income.receivedAmount ?? 0);
+                const card = findCard(
+                    cards,
+                    transactionIndex >= 0
+                        ? userData.transactions[transactionIndex].cardId
+                        : undefined,
+                );
 
-                if (amount > userData.totalAmount) {
-                    throw new BadRequestException(
-                        'Not enough money on the main balance to undo this income',
-                    );
-                }
+                ensureCardFunds(
+                    card,
+                    amount,
+                    'Not enough money on the card to undo this income',
+                );
 
-                updatedTotals =
-                    this.calculationService.calculateTotalsAfterDelete(
+                updatedCards = this.moveCardMoney(
+                    cards,
+                    card.id,
+                    amount,
+                    TransactionType.INCOME,
+                    true,
+                );
+                updatedTotals = {
+                    ...this.calculationService.calculateTotalsAfterDelete(
                         userData.totalAmount,
                         userData.totalIncome,
                         userData.totalSpend,
                         amount,
                         TransactionType.INCOME,
-                    );
+                    ),
+                    totalAmount: sumCards(updatedCards),
+                };
                 if (transactionIndex >= 0) {
                     userData.transactions.splice(transactionIndex, 1);
                 }
@@ -834,6 +987,7 @@ export class TransactionsService {
         const updatedItems = [...incomes];
         updatedItems[incomeIndex] = updatedIncome;
         userData.set('expectedIncomes', updatedItems);
+        userData.cards = updatedCards;
         Object.assign(userData, updatedTotals);
         await userData.save();
 
@@ -842,6 +996,7 @@ export class TransactionsService {
             updatedItems,
             updatedTotals,
             updatedTransactions: userData.transactions,
+            updatedCards,
         };
     }
 
@@ -1035,7 +1190,12 @@ export class TransactionsService {
     }
 
     async addSavingsOperation(
-        { item, affectsMainBalance, balanceAmount }: SavingsOperationPayloadDto,
+        {
+            item,
+            affectsMainBalance,
+            balanceAmount,
+            cardId,
+        }: SavingsOperationPayloadDto,
         req: AuthenticatedRequest,
     ) {
         const userId = this.getUserIdOrThrow(req);
@@ -1070,6 +1230,8 @@ export class TransactionsService {
             );
         }
 
+        const cards = this.prepareCards(userData);
+        let updatedCards = cards;
         let operationToSave = item;
         let updatedTransactions = userData.transactions || [];
         let updatedTotals = {
@@ -1093,21 +1255,26 @@ export class TransactionsService {
                 item.type === SavingsOperationType.DEPOSIT
                     ? TransactionType.EXPENSE
                     : TransactionType.INCOME;
-            if (
-                transactionType === TransactionType.EXPENSE &&
-                balanceAmount > userData.totalAmount
-            ) {
-                throw new BadRequestException(
-                    'Not enough money on the main balance',
-                );
+            const card = findCard(cards, cardId);
+            if (transactionType === TransactionType.EXPENSE) {
+                ensureCardFunds(card, balanceAmount);
             }
-            updatedTotals = this.calculationService.calculateAllTotals(
-                userData.totalAmount,
-                userData.totalIncome,
-                userData.totalSpend,
+            updatedCards = this.moveCardMoney(
+                cards,
+                card.id,
                 balanceAmount,
                 transactionType,
             );
+            updatedTotals = {
+                ...this.calculationService.calculateAllTotals(
+                    userData.totalAmount,
+                    userData.totalIncome,
+                    userData.totalSpend,
+                    balanceAmount,
+                    transactionType,
+                ),
+                totalAmount: sumCards(updatedCards),
+            };
 
             const transactionId = uuidv4();
             operationToSave = {
@@ -1125,6 +1292,7 @@ export class TransactionsService {
                 savingsStorage: item.storage,
                 savingsCurrency: item.currency,
                 savingsOperationId: item.id,
+                cardId: card.id,
             };
             updatedTransactions = [linkedTransaction, ...updatedTransactions];
         }
@@ -1136,6 +1304,7 @@ export class TransactionsService {
                 $set: {
                     savingsOperations: updatedOperations,
                     transactions: updatedTransactions,
+                    cards: updatedCards,
                     ...updatedTotals,
                 },
             },
@@ -1147,6 +1316,7 @@ export class TransactionsService {
             updatedOperations,
             updatedTransactions,
             updatedTotals,
+            updatedCards,
         };
     }
 
@@ -1184,6 +1354,8 @@ export class TransactionsService {
             );
         }
 
+        const cards = this.prepareCards(userData);
+        let updatedCards = cards;
         const linkedTransaction = operationToDelete.linkedTransactionId
             ? (userData.transactions || []).find(
                   (transaction) =>
@@ -1213,21 +1385,31 @@ export class TransactionsService {
                 (operationToDelete.type === SavingsOperationType.DEPOSIT
                     ? TransactionType.EXPENSE
                     : TransactionType.INCOME);
-            if (
-                linkedTransactionType === TransactionType.INCOME &&
-                linkedBalanceAmount > userData.totalAmount
-            ) {
-                throw new BadRequestException(
-                    'Not enough money on the main balance to reverse this withdrawal',
+            const card = findCard(cards, linkedTransaction?.cardId);
+            if (linkedTransactionType === TransactionType.INCOME) {
+                ensureCardFunds(
+                    card,
+                    linkedBalanceAmount,
+                    'Not enough money on the card to reverse this withdrawal',
                 );
             }
-            updatedTotals = this.calculationService.calculateTotalsAfterDelete(
-                userData.totalAmount,
-                userData.totalIncome,
-                userData.totalSpend,
+            updatedCards = this.moveCardMoney(
+                cards,
+                card.id,
                 linkedBalanceAmount,
                 linkedTransactionType,
+                true,
             );
+            updatedTotals = {
+                ...this.calculationService.calculateTotalsAfterDelete(
+                    userData.totalAmount,
+                    userData.totalIncome,
+                    userData.totalSpend,
+                    linkedBalanceAmount,
+                    linkedTransactionType,
+                ),
+                totalAmount: sumCards(updatedCards),
+            };
         }
 
         await this.AllTransactionsInfoModel.updateOne(
@@ -1236,6 +1418,7 @@ export class TransactionsService {
                 $set: {
                     savingsOperations: updatedOperations,
                     transactions: updatedTransactions,
+                    cards: updatedCards,
                     ...updatedTotals,
                 },
             },
@@ -1247,6 +1430,7 @@ export class TransactionsService {
             updatedOperations,
             updatedTransactions,
             updatedTotals,
+            updatedCards,
         };
     }
 
@@ -1286,6 +1470,10 @@ export class TransactionsService {
                     checked: false,
                 }));
 
+            updateData.cards = this.prepareCards(userData).map((card) => ({
+                ...card,
+                balance: 0,
+            }));
             updateData.totalAmount = 0;
             updateData.totalIncome = 0;
             updateData.totalSpend = 0;
@@ -1322,6 +1510,7 @@ export class TransactionsService {
             nextMonthEssentialsArray,
             expectedIncomes,
             updatedSavingsOperations,
+            updatedCards: updateData.cards,
         };
     }
 
@@ -1420,15 +1609,58 @@ export class TransactionsService {
             );
         }
 
-        if (transactionToDelete.transactionType === TransactionType.INCOME) {
-            const newBalance =
-                userTransactionsInfo.totalAmount - transactionToDelete.value;
+        const cards = this.prepareCards(userTransactionsInfo);
 
-            if (newBalance < 0) {
-                throw new BadRequestException(
-                    'You cannot delete this income transaction because it would make your balance negative',
+        if (transactionToDelete.transactionType === TransactionType.TRANSFER) {
+            const destination = findCard(cards, transactionToDelete.toCardId);
+            ensureCardFunds(
+                destination,
+                transactionToDelete.value,
+                'The money has already left the destination card',
+            );
+
+            const updatedCards = changeCardBalance(
+                changeCardBalance(
+                    cards,
+                    destination.id,
+                    -transactionToDelete.value,
+                ),
+                findCard(cards, transactionToDelete.cardId).id,
+                transactionToDelete.value,
+            );
+            const updatedTotals = {
+                totalAmount: sumCards(updatedCards),
+                totalIncome: userTransactionsInfo.totalIncome,
+                totalSpend: userTransactionsInfo.totalSpend,
+            };
+
+            userTransactionsInfo.transactions =
+                userTransactionsInfo.transactions.filter(
+                    (t) => t.id !== transactionId,
                 );
-            }
+            userTransactionsInfo.cards = updatedCards;
+            Object.assign(userTransactionsInfo, updatedTotals);
+            await userTransactionsInfo.save();
+
+            return {
+                message: 'Transaction deleted successfully',
+                deletedTransactionId: transactionId,
+                updatedTotals,
+                updatedItems: userTransactionsInfo.transactions,
+                updatedSavingsOperations:
+                    userTransactionsInfo.savingsOperations || [],
+                updatedCards,
+            };
+        }
+
+        const card = findCard(cards, transactionToDelete.cardId);
+
+        if (transactionToDelete.transactionType === TransactionType.INCOME) {
+            ensureCardFunds(
+                card,
+                transactionToDelete.value,
+                'You cannot delete this income transaction because it would make the card balance negative',
+            );
         }
 
         const savingsOperations = (userTransactionsInfo.savingsOperations ||
@@ -1466,15 +1698,25 @@ export class TransactionsService {
                 (t) => t.id !== transactionId,
             );
 
-        const updatedTotals =
-            this.calculationService.calculateTotalsAfterDelete(
+        const updatedCards = this.moveCardMoney(
+            cards,
+            card.id,
+            transactionToDelete.value,
+            transactionToDelete.transactionType,
+            true,
+        );
+        const updatedTotals = {
+            ...this.calculationService.calculateTotalsAfterDelete(
                 userTransactionsInfo.totalAmount,
                 userTransactionsInfo.totalIncome,
                 userTransactionsInfo.totalSpend,
                 transactionToDelete.value,
                 transactionToDelete.transactionType,
-            );
+            ),
+            totalAmount: sumCards(updatedCards),
+        };
 
+        userTransactionsInfo.cards = updatedCards;
         Object.assign(userTransactionsInfo, updatedTotals);
         userTransactionsInfo.savingsOperations = updatedSavingsOperations;
 
@@ -1486,6 +1728,7 @@ export class TransactionsService {
             updatedTotals,
             updatedItems: userTransactionsInfo.transactions,
             updatedSavingsOperations,
+            updatedCards,
         };
     }
 
@@ -1500,6 +1743,7 @@ export class TransactionsService {
             savingsStorage,
             savingsCurrency,
             savingsAmount,
+            cardId,
         }: UpdateTransactionDto,
         req: AuthenticatedRequest,
     ) {
@@ -1549,6 +1793,15 @@ export class TransactionsService {
         }
 
         if (
+            oldTransaction.transactionType === TransactionType.TRANSFER ||
+            transactionType === TransactionType.TRANSFER
+        ) {
+            throw new BadRequestException(
+                'Delete the transfer and make a new one instead',
+            );
+        }
+
+        if (
             transactionType === TransactionType.INCOME &&
             categorie === SAVINGS_CATEGORY
         ) {
@@ -1557,28 +1810,56 @@ export class TransactionsService {
             );
         }
 
-        const revertedTotals =
-            this.calculationService.calculateTotalsAfterDelete(
+        const cards = this.prepareCards(userTransactionsInfo);
+        const oldCard = findCard(cards, oldTransaction.cardId);
+        const newCard = findCard(cards, cardId ?? oldCard.id);
+
+        const signed = (amount: number, type: TransactionType) =>
+            type === TransactionType.INCOME ? amount : -amount;
+        const projected = new Map(cards.map((card) => [card.id, card.balance]));
+        projected.set(
+            oldCard.id,
+            projected.get(oldCard.id)! -
+                signed(oldTransaction.value, oldTransaction.transactionType),
+        );
+        projected.set(
+            newCard.id,
+            projected.get(newCard.id)! + signed(value, transactionType),
+        );
+
+        if (
+            [...projected.values()].some(
+                (balance) => roundCurrency(balance) < 0,
+            )
+        ) {
+            throw new BadRequestException(
+                'Transaction cannot be updated because the card balance would be negative',
+            );
+        }
+
+        const revertedCards = this.moveCardMoney(
+            cards,
+            oldCard.id,
+            oldTransaction.value,
+            oldTransaction.transactionType,
+            true,
+        );
+        const revertedTotals = {
+            ...this.calculationService.calculateTotalsAfterDelete(
                 userTransactionsInfo.totalAmount,
                 userTransactionsInfo.totalIncome,
                 userTransactionsInfo.totalSpend,
                 oldTransaction.value,
                 oldTransaction.transactionType,
-            );
-
-        if (
-            transactionType === TransactionType.EXPENSE &&
-            value > revertedTotals.totalAmount
-        ) {
-            throw new BadRequestException(
-                'Transaction cannot be updated because the main balance would be negative',
-            );
-        }
+            ),
+            totalAmount: sumCards(revertedCards),
+        };
 
         Object.assign(userTransactionsInfo, revertedTotals);
 
         const updatedTransaction: TransactionDto = {
             ...oldTransaction,
+            cardId: newCard.id,
             value,
             transactionType,
             categorie: categorie ?? oldTransaction.categorie,
@@ -1625,14 +1906,24 @@ export class TransactionsService {
         userTransactionsInfo.transactions[transactionIndex] =
             updatedTransaction;
 
-        const updatedTotals = this.calculationService.calculateAllTotals(
-            userTransactionsInfo.totalAmount,
-            userTransactionsInfo.totalIncome,
-            userTransactionsInfo.totalSpend,
+        const updatedCards = this.moveCardMoney(
+            revertedCards,
+            newCard.id,
             value,
             transactionType,
         );
+        const updatedTotals = {
+            ...this.calculationService.calculateAllTotals(
+                userTransactionsInfo.totalAmount,
+                userTransactionsInfo.totalIncome,
+                userTransactionsInfo.totalSpend,
+                value,
+                transactionType,
+            ),
+            totalAmount: sumCards(updatedCards),
+        };
 
+        userTransactionsInfo.cards = updatedCards;
         Object.assign(userTransactionsInfo, updatedTotals);
 
         await userTransactionsInfo.save();
@@ -1645,6 +1936,7 @@ export class TransactionsService {
             updatedItems: userTransactionsInfo.transactions,
             updatedSavingsOperations:
                 userTransactionsInfo.savingsOperations || [],
+            updatedCards,
         };
     }
 }

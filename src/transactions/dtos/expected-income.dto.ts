@@ -68,4 +68,8 @@ export class ExpectedIncomeReceivedDto {
     @IsOptional()
     @IsBoolean()
     addToBalance?: boolean;
+
+    @IsOptional()
+    @IsString()
+    cardId?: string;
 }

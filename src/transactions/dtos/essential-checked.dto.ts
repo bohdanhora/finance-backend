@@ -2,6 +2,7 @@ import {
     IsBoolean,
     IsEnum,
     IsNumber,
+    IsOptional,
     IsString,
     Min,
     ValidateIf,
@@ -21,6 +22,10 @@ export class EssentialCheckedItemDto {
     @IsNumber()
     @Min(0.01)
     actualAmount?: number;
+
+    @IsOptional()
+    @IsString()
+    cardId?: string;
 }
 
 export class EssentialCheckedDto {

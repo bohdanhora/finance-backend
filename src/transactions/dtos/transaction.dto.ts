@@ -13,6 +13,7 @@ import { SavingsCurrency, SavingsStorage } from './savings.dto';
 export enum TransactionType {
     EXPENSE = 'expense',
     INCOME = 'income',
+    TRANSFER = 'transfer',
 }
 
 export class TransactionDto {
@@ -29,6 +30,13 @@ export class TransactionDto {
     categorie: string;
     @IsString()
     description: string;
+
+    @IsOptional()
+    @IsString()
+    cardId?: string;
+
+    @Equals(undefined)
+    toCardId?: string;
 
     @ValidateIf(
         (transaction: TransactionDto) =>

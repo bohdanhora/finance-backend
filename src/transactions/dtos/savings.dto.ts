@@ -168,6 +168,10 @@ export class SavingsOperationPayloadDto {
     @IsNumber()
     @Min(0.01)
     balanceAmount?: number;
+
+    @IsOptional()
+    @IsString()
+    cardId?: string;
 }
 
 export class SavingsPriceQueryDto {

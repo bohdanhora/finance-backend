@@ -14,6 +14,7 @@ import { ExpectedIncomeRecord } from '../dtos/expected-income.dto';
 import { MonthSnapshot } from '../helpers/month-rollover';
 import { AssistantPreferences } from '../dtos/connections.dto';
 import { EncryptedSecret } from '../helpers/secret-cipher';
+import { CardRecord } from '../helpers/cards';
 
 @Schema()
 export class AllTransactionsInfo {
@@ -21,6 +22,8 @@ export class AllTransactionsInfo {
     userId: string;
     @Prop({ enum: SavingsCurrency })
     currency?: SavingsCurrency;
+    @Prop({ type: [Object], default: [] })
+    cards: CardRecord[];
     @Prop({ required: true })
     totalAmount: number;
     @Prop({ required: true })
