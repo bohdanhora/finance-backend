@@ -277,4 +277,97 @@ describe('cards', () => {
         ]);
         expect(result.totalAmount).toBe(650);
     });
+
+    it('spends into the credit limit and keeps the debt as a negative balance', async () => {
+        const { transactions } = createServices({
+            totalAmount: 1_100,
+            cards: [
+                card('mono', 1_000),
+                { ...card('credit', 100), creditLimit: 500 },
+            ],
+        });
+        const spend = (id: string, value: number) =>
+            transactions.newTransaction(
+                {
+                    id,
+                    transactionType: TransactionType.EXPENSE,
+                    value,
+                    date,
+                    categorie: 'food',
+                    description: '',
+                    cardId: 'credit',
+                },
+                request,
+            );
+
+        await expect(spend('too-much', 650)).rejects.toThrow(
+            'Not enough money on this card',
+        );
+
+        const result = await spend('tv', 400);
+
+        expect(result.updatedCards.map((item) => item.balance)).toEqual([
+            1_000, -300,
+        ]);
+        expect(result.updatedTotals.totalAmount).toBe(700);
+    });
+
+    it('refuses a credit limit smaller than the debt already on the card', async () => {
+        const { cards } = createServices({
+            totalAmount: 700,
+            cards: [
+                card('mono', 1_000),
+                { ...card('credit', -300), creditLimit: 500 },
+            ],
+        });
+
+        await expect(
+            cards.updateCard({ id: 'credit', creditLimit: 200 }, request),
+        ).rejects.toThrow('bigger than its credit limit');
+
+        const result = await cards.updateCard(
+            { id: 'credit', creditLimit: 300 },
+            request,
+        );
+
+        expect(result.updatedCards[1]).toEqual(
+            expect.objectContaining({ balance: -300, creditLimit: 300 }),
+        );
+    });
+
+    it('opens a credit card already in debt and never lets a debit card go negative', async () => {
+        const { cards, transactions } = createServices({
+            totalAmount: 1_000,
+            cards: [card('mono', 1_000)],
+        });
+
+        await expect(
+            cards.createCard(
+                { name: 'Debit', skin: CardSkin.DEFAULT, balance: -10 },
+                request,
+            ),
+        ).rejects.toThrow('no credit limit');
+
+        const result = await cards.createCard(
+            {
+                name: 'Credit',
+                skin: CardSkin.DEFAULT,
+                balance: -2_000,
+                creditLimit: 5_000,
+            },
+            request,
+        );
+
+        expect(result.card).toEqual(
+            expect.objectContaining({ balance: -2_000, creditLimit: 5_000 }),
+        );
+        expect(result.totalAmount).toBe(-1_000);
+
+        await expect(
+            transactions.setTotalAmount(
+                { totalAmount: -1, cardId: 'mono' },
+                request,
+            ),
+        ).rejects.toThrow('no credit limit');
+    });
 });

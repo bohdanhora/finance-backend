@@ -63,7 +63,9 @@ import {
     CardRecord,
     buildCardsMigration,
     changeCardBalance,
+    creditLimitOf,
     ensureCardFunds,
+    ensureWithinCreditLimit,
     findCard,
     plainCards,
     sumCards,
@@ -427,6 +429,7 @@ export class TransactionsService {
         const balance = cardId
             ? totalAmount
             : totalAmount - sumCards(otherCards);
+        ensureWithinCreditLimit(balance, creditLimitOf(card));
         const updatedCards = changeCardBalance(
             cards,
             card.id,

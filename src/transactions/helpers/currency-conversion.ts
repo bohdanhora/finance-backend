@@ -90,7 +90,13 @@ const convertMonthHistory = (
 const convertCards = (cards: CardRecord[], rate: number): CardRecord[] =>
     cards.map((documentCard) => {
         const card = toPlain(documentCard);
-        return { ...card, balance: convertValue(card.balance, rate) };
+        return {
+            ...card,
+            balance: convertValue(card.balance, rate),
+            ...(card.creditLimit
+                ? { creditLimit: convertValue(card.creditLimit, rate) }
+                : {}),
+        };
     });
 
 export const convertMainCurrencyAmounts = (

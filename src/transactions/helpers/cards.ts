@@ -9,6 +9,7 @@ export type CardRecord = {
     name: string;
     skin: CardSkin;
     balance: number;
+    creditLimit?: number;
     createdAt: string;
 };
 
@@ -29,15 +30,39 @@ export const plainCards = (cards: CardRecord[] = []): CardRecord[] =>
 export const sumCards = (cards: CardRecord[] = []): number =>
     roundCurrency(cards.reduce((total, card) => total + card.balance, 0));
 
+export const creditLimitOf = (card: Pick<CardRecord, 'creditLimit'>) =>
+    roundCurrency(Math.max(0, card.creditLimit ?? 0));
+
+export const availableOnCard = (card: CardRecord) =>
+    roundCurrency(card.balance + creditLimitOf(card));
+
 export const createCard = (
     fields: Partial<Omit<CardRecord, 'createdAt'>> = {},
-): CardRecord => ({
-    id: fields.id || uuidv4(),
-    name: fields.name?.trim() || '',
-    skin: fields.skin || CardSkin.DEFAULT,
-    balance: roundCurrency(Math.max(0, fields.balance ?? 0)),
-    createdAt: new Date().toISOString(),
-});
+): CardRecord => {
+    const creditLimit = creditLimitOf(fields);
+
+    return {
+        id: fields.id || uuidv4(),
+        name: fields.name?.trim() || '',
+        skin: fields.skin || CardSkin.DEFAULT,
+        balance: roundCurrency(Math.max(-creditLimit, fields.balance ?? 0)),
+        ...(creditLimit ? { creditLimit } : {}),
+        createdAt: new Date().toISOString(),
+    };
+};
+
+export const ensureWithinCreditLimit = (
+    balance: number,
+    creditLimit: number,
+) => {
+    if (roundCurrency(balance) < -roundCurrency(Math.max(0, creditLimit))) {
+        throw new BadRequestException(
+            creditLimit > 0
+                ? 'The debt on this card is bigger than its credit limit'
+                : 'This card has no credit limit, so its balance cannot be negative',
+        );
+    }
+};
 
 export const buildCardsMigration = (
     source: CardsSource,
@@ -94,7 +119,9 @@ export const changeCardBalance = (
         card.id === cardId
             ? {
                   ...card,
-                  balance: roundCurrency(Math.max(0, card.balance + delta)),
+                  balance: roundCurrency(
+                      Math.max(-creditLimitOf(card), card.balance + delta),
+                  ),
               }
             : card,
     );
@@ -104,7 +131,7 @@ export const ensureCardFunds = (
     amount: number,
     message = 'Not enough money on this card',
 ) => {
-    if (roundCurrency(amount) > roundCurrency(card.balance)) {
+    if (roundCurrency(amount) > availableOnCard(card)) {
         throw new BadRequestException(message);
     }
 };

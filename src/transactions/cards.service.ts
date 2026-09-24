@@ -20,11 +20,14 @@ import {
     buildCardsMigration,
     changeCardBalance,
     createCard,
+    creditLimitOf,
     ensureCardFunds,
+    ensureWithinCreditLimit,
     findCard,
     plainCards,
     sumCards,
 } from './helpers/cards';
+import { roundCurrency } from './helpers/currency-conversion';
 
 export const MAX_CARDS = 12;
 const TRANSFER_CATEGORY = 'transfer';
@@ -85,7 +88,7 @@ export class CardsService {
     }
 
     async createCard(
-        { name, skin, balance }: CreateCardDto,
+        { name, skin, balance, creditLimit }: CreateCardDto,
         req: AuthenticatedRequest,
     ) {
         const { userId, cards, transactions } = await this.load(req);
@@ -96,7 +99,9 @@ export class CardsService {
             );
         }
 
-        const card = createCard({ name, skin, balance });
+        ensureWithinCreditLimit(balance ?? 0, creditLimit ?? 0);
+
+        const card = createCard({ name, skin, balance, creditLimit });
 
         return {
             message: 'Card added',
@@ -106,11 +111,15 @@ export class CardsService {
     }
 
     async updateCard(
-        { id, name, skin }: UpdateCardDto,
+        { id, name, skin, creditLimit }: UpdateCardDto,
         req: AuthenticatedRequest,
     ) {
         const { userId, cards, transactions } = await this.load(req);
-        findCard(cards, id);
+        const current = findCard(cards, id);
+
+        if (creditLimit !== undefined) {
+            ensureWithinCreditLimit(current.balance, creditLimit);
+        }
 
         const updatedCards = cards.map((card) =>
             card.id === id
@@ -118,6 +127,9 @@ export class CardsService {
                       ...card,
                       ...(name !== undefined ? { name: name.trim() } : {}),
                       ...(skin ? { skin } : {}),
+                      ...(creditLimit !== undefined
+                          ? { creditLimit: roundCurrency(creditLimit) }
+                          : {}),
                   }
                 : card,
         );
@@ -158,6 +170,11 @@ export class CardsService {
                 'Choose another card to keep the money and history',
             );
         }
+
+        ensureWithinCreditLimit(
+            target.balance + card.balance,
+            creditLimitOf(target),
+        );
 
         const updatedCards = changeCardBalance(
             cards.filter((item) => item.id !== card.id),

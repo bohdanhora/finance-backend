@@ -27,8 +27,12 @@ export class CreateCardDto {
 
     @IsOptional()
     @IsNumber()
-    @Min(0)
     balance?: number;
+
+    @IsOptional()
+    @IsNumber()
+    @Min(0)
+    creditLimit?: number;
 }
 
 export class UpdateCardDto {
@@ -43,6 +47,11 @@ export class UpdateCardDto {
     @IsOptional()
     @IsEnum(CardSkin)
     skin?: CardSkin;
+
+    @IsOptional()
+    @IsNumber()
+    @Min(0)
+    creditLimit?: number;
 }
 
 export class DeleteCardQueryDto {
