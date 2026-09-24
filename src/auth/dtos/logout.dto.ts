@@ -1,6 +1,11 @@
-import { IsString } from 'class-validator';
+import { IsOptional, IsString } from 'class-validator';
 
 export class LogoutDto {
+    @IsOptional()
     @IsString()
-    userId: string;
+    refreshToken?: string;
+
+    @IsOptional()
+    @IsString()
+    userId?: string;
 }

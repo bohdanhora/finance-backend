@@ -12,8 +12,9 @@ import { Model, Types } from 'mongoose';
 import * as bcrypt from 'bcrypt';
 import { LoginDto } from './dtos/login.dto';
 import { JwtService } from '@nestjs/jwt';
-import { RefreshToken } from './schemas/refresh-token.schema';
 import { v4 as uuidv4 } from 'uuid';
+import { SessionContext, SessionsService } from 'src/sessions/sessions.service';
+import { SessionEndReason, SessionMethod } from 'src/sessions/session.schema';
 import { ResetToken } from './schemas/reset-token.schema';
 import { MailService } from 'src/services/mail.service';
 import { LogoutDto } from './dtos/logout.dto';
@@ -28,8 +29,7 @@ export class AuthService {
         @InjectModel(User.name) private UserModel: Model<User>,
         @InjectModel(AllTransactionsInfo.name)
         private AllTransactionsInfoModel: Model<AllTransactionsInfo>,
-        @InjectModel(RefreshToken.name)
-        private RefreshTokenModel: Model<RefreshToken>,
+        private sessionsService: SessionsService,
         @InjectModel(ResetToken.name)
         private ResetTokenModel: Model<ResetToken>,
         private jwtService: JwtService,
@@ -90,7 +90,7 @@ export class AuthService {
         };
     }
 
-    async login(loginData: LoginDto) {
+    async login(loginData: LoginDto, context: SessionContext = {}) {
         const { email, password } = loginData;
 
         const user = await this.UserModel.findOne({ email });
@@ -109,30 +109,30 @@ export class AuthService {
             throw new UnauthorizedException('Wrong Credentials');
         }
 
-        return this.generateUserTokens(user._id.toString());
+        return this.generateUserTokens(
+            user._id.toString(),
+            SessionMethod.PASSWORD,
+            context,
+        );
     }
 
-    async refreshTokens(refreshToken: string) {
-        const token: RefreshToken | null = await this.RefreshTokenModel.findOne(
-            {
-                token: refreshToken,
-                expiryDate: { $gte: new Date() },
-            },
+    async refreshTokens(refreshToken: string, context: SessionContext = {}) {
+        const session = await this.sessionsService.rotate(
+            refreshToken,
+            context,
         );
 
-        if (!token) {
+        if (!session) {
             throw new UnauthorizedException();
         }
 
-        if (!Types.ObjectId.isValid(token.userId)) {
-            throw new BadRequestException('Invalid userId format');
-        }
-
-        return this.generateUserTokens(token.userId.toString());
+        return this.signTokens(session);
     }
 
     async generateUserTokens(
         userOrId: string | UserDocument,
+        method: SessionMethod,
+        context: SessionContext = {},
     ): Promise<{ accessToken: string; refreshToken: string; userId: string }> {
         const userId =
             typeof userOrId === 'string' ? userOrId : userOrId._id.toString();
@@ -141,36 +141,33 @@ export class AuthService {
             throw new BadRequestException('Invalid userId format');
         }
 
-        const accessTokenTtl =
-            this.configService.get<string>('jwt.accessTokenTtl')!;
-        const refreshTokenDays = this.configService.get<number>(
-            'jwt.refreshTokenTtlDays',
-        )!;
-
-        const accessToken = this.jwtService.sign(
-            { userId },
-            { expiresIn: accessTokenTtl },
+        const session = await this.sessionsService.start(
+            userId,
+            method,
+            context,
         );
-        const refreshToken = uuidv4();
 
-        await this.storeRefreshToken(refreshToken, userId, refreshTokenDays);
-
-        return { accessToken, refreshToken, userId };
+        return this.signTokens(session);
     }
 
-    async storeRefreshToken(token: string, userId: string, days: number) {
-        if (!Types.ObjectId.isValid(userId)) {
-            throw new BadRequestException('Invalid userId format');
-        }
-
-        const expiryDate = new Date();
-        expiryDate.setDate(expiryDate.getDate() + days);
-
-        await this.RefreshTokenModel.updateOne(
-            { userId },
-            { $set: { expiryDate, token } },
-            { upsert: true },
+    private signTokens({
+        sessionId,
+        userId,
+        refreshToken,
+    }: {
+        sessionId: string;
+        userId: string;
+        refreshToken: string;
+    }) {
+        const accessToken = this.jwtService.sign(
+            { userId, sid: sessionId },
+            {
+                expiresIn:
+                    this.configService.get<string>('jwt.accessTokenTtl')!,
+            },
         );
+
+        return { accessToken, refreshToken, userId };
     }
 
     async getAccount(userId: string) {
@@ -197,6 +194,7 @@ export class AuthService {
             oldPassword,
             newPassword,
         }: { oldPassword?: string; newPassword: string },
+        sessionId?: string,
     ) {
         if (!Types.ObjectId.isValid(userId)) {
             throw new BadRequestException('Invalid userId format');
@@ -222,6 +220,11 @@ export class AuthService {
         user.password = await bcrypt.hash(newPassword, 10);
 
         await user.save();
+        await this.sessionsService.endAll(
+            userId,
+            SessionEndReason.PASSWORD_CHANGED,
+            sessionId,
+        );
 
         return {
             message: created ? 'Password created' : 'Password changed',
@@ -277,24 +280,20 @@ export class AuthService {
 
         user.password = await bcrypt.hash(newPassword, 10);
         await user.save();
+        await this.sessionsService.endAll(
+            user._id.toString(),
+            SessionEndReason.PASSWORD_RESET,
+        );
 
         return {
             message: 'Success reset',
         };
     }
 
-    async logout({ userId }: LogoutDto) {
-        if (!Types.ObjectId.isValid(userId)) {
-            throw new BadRequestException('Invalid userId format');
+    async logout({ refreshToken }: LogoutDto) {
+        if (refreshToken) {
+            await this.sessionsService.endByRefreshToken(refreshToken);
         }
-
-        const user = await this.UserModel.findById(userId);
-
-        if (!user) {
-            throw new UnauthorizedException('User not found!');
-        }
-
-        await this.RefreshTokenModel.findOneAndDelete({ userId });
 
         return {
             message: 'Success logout',

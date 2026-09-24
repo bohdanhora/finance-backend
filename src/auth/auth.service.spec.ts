@@ -14,11 +14,12 @@ const createService = (password?: string | null) => {
         save: jest.fn().mockResolvedValue(undefined),
     };
     const userModel = { findById: jest.fn().mockResolvedValue(user) };
+    const sessions = { endAll: jest.fn().mockResolvedValue(0) };
 
     const service = new AuthService(
         userModel as never,
         {} as never,
-        {} as never,
+        sessions as never,
         {} as never,
         {} as never,
         {} as never,
@@ -26,7 +27,7 @@ const createService = (password?: string | null) => {
         {} as never,
     );
 
-    return { service, user };
+    return { service, user, sessions };
 };
 
 describe('AuthService passwords', () => {
@@ -60,17 +61,26 @@ describe('AuthService passwords', () => {
         ).rejects.toBeInstanceOf(BadRequestException);
     });
 
-    it('replaces the password when the current one matches', async () => {
-        const { service, user } = createService(
+    it('replaces the password when the current one matches and ends the other sessions', async () => {
+        const { service, user, sessions } = createService(
             await bcrypt.hash('secret1', 4),
         );
 
         await expect(
-            service.changePassword(userId, {
-                oldPassword: 'secret1',
-                newPassword: 'secret2',
-            }),
+            service.changePassword(
+                userId,
+                {
+                    oldPassword: 'secret1',
+                    newPassword: 'secret2',
+                },
+                'current-session',
+            ),
         ).resolves.toEqual({ message: 'Password changed' });
+        expect(sessions.endAll).toHaveBeenCalledWith(
+            userId,
+            'password-changed',
+            'current-session',
+        );
         await expect(
             bcrypt.compare('secret2', user.password as string),
         ).resolves.toBe(true);

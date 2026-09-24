@@ -19,12 +19,15 @@ import { AuthGuard } from 'src/guards/auth.guard';
 import { LogoutDto } from './dtos/logout.dto';
 import { GoogleAuthGuard } from 'src/guards/google-auth.guard';
 import { UserDocument } from './schemas/user.schema';
-import { Response } from 'express';
+import { Request as ExpressRequest, Response } from 'express';
+import { requestContext } from 'src/sessions/helpers/request-context';
+import { SessionMethod } from 'src/sessions/session.schema';
 import { EmailVerificationRequestDto } from './dtos/email-verification-request.dto';
 import { ConfigService } from '@nestjs/config';
 
 interface RequestWithUserId extends Request {
     userId: string;
+    sessionId?: string;
 }
 
 interface RequestWithUser extends Request {
@@ -44,13 +47,19 @@ export class AuthController {
     }
 
     @Post('login')
-    async login(@Body() loginData: LoginDto) {
-        return this.authService.login(loginData);
+    async login(@Body() loginData: LoginDto, @Req() req: ExpressRequest) {
+        return this.authService.login(loginData, requestContext(req));
     }
 
     @Post('refresh')
-    async refreshTokens(@Body() refreshTokenData: RefreshTokenDto) {
-        return this.authService.refreshTokens(refreshTokenData.refreshToken);
+    async refreshTokens(
+        @Body() refreshTokenData: RefreshTokenDto,
+        @Req() req: ExpressRequest,
+    ) {
+        return this.authService.refreshTokens(
+            refreshTokenData.refreshToken,
+            requestContext(req),
+        );
     }
 
     @UseGuards(AuthGuard)
@@ -65,7 +74,11 @@ export class AuthController {
         @Body() changePasswordData: ChangePasswordDto,
         @Req() req: RequestWithUserId,
     ) {
-        return this.authService.changePassword(req.userId, changePasswordData);
+        return this.authService.changePassword(
+            req.userId,
+            changePasswordData,
+            req.sessionId,
+        );
     }
 
     @Post('forgot-password')
@@ -100,7 +113,11 @@ export class AuthController {
          * This is intentional here because we need to perform a redirect
          * after successful OAuth authentication.
          */
-        const tokens = await this.authService.generateUserTokens(req.user);
+        const tokens = await this.authService.generateUserTokens(
+            req.user,
+            SessionMethod.GOOGLE,
+            requestContext(req as unknown as ExpressRequest),
+        );
 
         const frontendUrl = this.configService.get<string>('app.frontendUrl');
 
