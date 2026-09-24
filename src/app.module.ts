@@ -7,6 +7,7 @@ import { JwtModule } from '@nestjs/jwt';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TransactionsModule } from './transactions/transactions.module';
 import config from './config/config';
+import { SessionsModule } from './sessions/sessions.module';
 
 @Module({
     imports: [
@@ -30,6 +31,7 @@ import config from './config/config';
             }),
             inject: [ConfigService],
         }),
+        SessionsModule,
         AuthModule,
         TransactionsModule,
     ],

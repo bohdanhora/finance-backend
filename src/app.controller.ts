@@ -5,6 +5,7 @@ import { AuthGuard } from './guards/auth.guard';
 
 export interface AuthenticatedRequest extends Request {
     userId: string;
+    sessionId?: string;
 }
 
 @UseGuards(AuthGuard)

@@ -8,19 +8,24 @@ import {
 import { JwtService } from '@nestjs/jwt';
 import { Request } from 'express';
 import { Types } from 'mongoose';
-import { Observable } from 'rxjs';
+import { requestContext } from 'src/sessions/helpers/request-context';
+import { SessionsService } from 'src/sessions/sessions.service';
 
 interface AuthenticatedRequest extends Request {
     userId?: string;
+    sessionId?: string;
 }
+
+type AccessPayload = { userId: string; sid?: string };
 
 @Injectable()
 export class AuthGuard implements CanActivate {
-    constructor(private jwtService: JwtService) {}
+    constructor(
+        private jwtService: JwtService,
+        private sessionsService: SessionsService,
+    ) {}
 
-    canActivate(
-        context: ExecutionContext,
-    ): boolean | Promise<boolean> | Observable<boolean> {
+    async canActivate(context: ExecutionContext): Promise<boolean> {
         const request = context
             .switchToHttp()
             .getRequest<AuthenticatedRequest>();
@@ -30,22 +35,36 @@ export class AuthGuard implements CanActivate {
             throw new UnauthorizedException('Invalid Token');
         }
 
+        let payload: AccessPayload;
         try {
-            const payload = this.jwtService.verify<{ userId: string }>(token);
-
-            if (!payload.userId || !Types.ObjectId.isValid(payload.userId)) {
-                throw new UnauthorizedException('Invalid userId in token');
-            }
-
-            request.userId = payload.userId;
+            payload = this.jwtService.verify<AccessPayload>(token);
         } catch (error: unknown) {
-            if (error instanceof Error) {
-                Logger.error(error.message);
-            } else {
-                Logger.error('Unknown error during token verification');
-            }
+            Logger.error(
+                error instanceof Error
+                    ? error.message
+                    : 'Unknown error during token verification',
+            );
             throw new UnauthorizedException('Invalid Token');
         }
+
+        if (!payload.userId || !Types.ObjectId.isValid(payload.userId)) {
+            throw new UnauthorizedException('Invalid userId in token');
+        }
+
+        if (payload.sid) {
+            const alive = await this.sessionsService.touch(
+                payload.sid,
+                payload.userId,
+                requestContext(request),
+            );
+
+            if (!alive) {
+                throw new UnauthorizedException('Session ended');
+            }
+        }
+
+        request.userId = payload.userId;
+        request.sessionId = payload.sid;
 
         return true;
     }
