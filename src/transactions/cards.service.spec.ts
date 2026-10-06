@@ -370,4 +370,30 @@ describe('cards', () => {
             ),
         ).rejects.toThrow('no credit limit');
     });
+    it('keeps a card cover through other edits and removes it on null', async () => {
+        const cover = 'data:image/jpeg;base64,AAAA';
+        const { cards } = createServices({
+            totalAmount: 100,
+            cards: [card('mono', 100)],
+        });
+
+        const added = await cards.updateCard({ id: 'mono', cover }, request);
+        expect(added.updatedCards[0]).toEqual(
+            expect.objectContaining({ cover }),
+        );
+
+        const renamed = await cards.updateCard(
+            { id: 'mono', name: 'Main' },
+            request,
+        );
+        expect(renamed.updatedCards[0]).toEqual(
+            expect.objectContaining({ name: 'Main', cover }),
+        );
+
+        const removed = await cards.updateCard(
+            { id: 'mono', cover: null },
+            request,
+        );
+        expect(removed.updatedCards[0]).not.toHaveProperty('cover');
+    });
 });

@@ -10,6 +10,7 @@ export type CardRecord = {
     skin: CardSkin;
     balance: number;
     creditLimit?: number;
+    cover?: string;
     createdAt: string;
 };
 
@@ -47,6 +48,7 @@ export const createCard = (
         skin: fields.skin || CardSkin.DEFAULT,
         balance: roundCurrency(Math.max(-creditLimit, fields.balance ?? 0)),
         ...(creditLimit ? { creditLimit } : {}),
+        ...(fields.cover ? { cover: fields.cover } : {}),
         createdAt: new Date().toISOString(),
     };
 };

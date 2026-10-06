@@ -88,7 +88,7 @@ export class CardsService {
     }
 
     async createCard(
-        { name, skin, balance, creditLimit }: CreateCardDto,
+        { name, skin, balance, creditLimit, cover }: CreateCardDto,
         req: AuthenticatedRequest,
     ) {
         const { userId, cards, transactions } = await this.load(req);
@@ -101,7 +101,7 @@ export class CardsService {
 
         ensureWithinCreditLimit(balance ?? 0, creditLimit ?? 0);
 
-        const card = createCard({ name, skin, balance, creditLimit });
+        const card = createCard({ name, skin, balance, creditLimit, cover });
 
         return {
             message: 'Card added',
@@ -111,7 +111,7 @@ export class CardsService {
     }
 
     async updateCard(
-        { id, name, skin, creditLimit }: UpdateCardDto,
+        { id, name, skin, creditLimit, cover }: UpdateCardDto,
         req: AuthenticatedRequest,
     ) {
         const { userId, cards, transactions } = await this.load(req);
@@ -121,18 +121,22 @@ export class CardsService {
             ensureWithinCreditLimit(current.balance, creditLimit);
         }
 
-        const updatedCards = cards.map((card) =>
-            card.id === id
-                ? {
-                      ...card,
-                      ...(name !== undefined ? { name: name.trim() } : {}),
-                      ...(skin ? { skin } : {}),
-                      ...(creditLimit !== undefined
-                          ? { creditLimit: roundCurrency(creditLimit) }
-                          : {}),
-                  }
-                : card,
-        );
+        const updatedCards = cards.map((card) => {
+            if (card.id !== id) return card;
+
+            const { cover: previousCover, ...rest } = card;
+            const nextCover = cover === undefined ? previousCover : cover;
+
+            return {
+                ...rest,
+                ...(name !== undefined ? { name: name.trim() } : {}),
+                ...(skin ? { skin } : {}),
+                ...(creditLimit !== undefined
+                    ? { creditLimit: roundCurrency(creditLimit) }
+                    : {}),
+                ...(nextCover ? { cover: nextCover } : {}),
+            };
+        });
 
         return {
             message: 'Card updated',

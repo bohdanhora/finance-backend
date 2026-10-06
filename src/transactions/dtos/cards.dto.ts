@@ -6,9 +6,15 @@ import {
     IsNumber,
     IsOptional,
     IsString,
+    Matches,
     MaxLength,
     Min,
+    ValidateIf,
 } from 'class-validator';
+
+export const CARD_COVER_MAX_LENGTH = 400_000;
+export const CARD_COVER_PATTERN =
+    /^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/;
 
 export enum CardSkin {
     DEFAULT = 'default',
@@ -33,6 +39,14 @@ export class CreateCardDto {
     @IsNumber()
     @Min(0)
     creditLimit?: number;
+
+    @IsOptional()
+    @IsString()
+    @MaxLength(CARD_COVER_MAX_LENGTH)
+    @Matches(CARD_COVER_PATTERN, {
+        message: 'Card cover must be a JPEG, PNG or WebP image',
+    })
+    cover?: string;
 }
 
 export class UpdateCardDto {
@@ -52,6 +66,15 @@ export class UpdateCardDto {
     @IsNumber()
     @Min(0)
     creditLimit?: number;
+
+    @IsOptional()
+    @ValidateIf((_, value) => value !== null)
+    @IsString()
+    @MaxLength(CARD_COVER_MAX_LENGTH)
+    @Matches(CARD_COVER_PATTERN, {
+        message: 'Card cover must be a JPEG, PNG or WebP image',
+    })
+    cover?: string | null;
 }
 
 export class DeleteCardQueryDto {
