@@ -1831,9 +1831,13 @@ export class TransactionsService {
         );
 
         if (
-            [...projected.values()].some(
-                (balance) => roundCurrency(balance) < 0,
-            )
+            cards.some((card) => {
+                const balance = roundCurrency(projected.get(card.id)!);
+                return (
+                    balance < roundCurrency(card.balance) &&
+                    balance < -creditLimitOf(card)
+                );
+            })
         ) {
             throw new BadRequestException(
                 'Transaction cannot be updated because the card balance would be negative',
