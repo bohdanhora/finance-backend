@@ -23,6 +23,11 @@ import { VerificationService } from 'src/services/verification.service';
 import { ConfigService } from '@nestjs/config';
 import { toMonthKey } from 'src/transactions/helpers/month-rollover';
 
+const CASE_INSENSITIVE = { locale: 'en', strength: 2 } as const;
+
+export const normaliseEmail = (email: string): string =>
+    email.trim().toLowerCase();
+
 @Injectable()
 export class AuthService {
     constructor(
@@ -38,8 +43,15 @@ export class AuthService {
         private configService: ConfigService,
     ) {}
 
+    private findByEmail(email: string) {
+        return this.UserModel.findOne({
+            email: normaliseEmail(email),
+        }).collation(CASE_INSENSITIVE);
+    }
+
     async registration(registrationData: RegistrationDto) {
-        const { email, password, name, verificationCode } = registrationData;
+        const { password, name, verificationCode } = registrationData;
+        const email = normaliseEmail(registrationData.email);
 
         const isValid = this.verificationService.verifyCode(
             email,
@@ -52,9 +64,7 @@ export class AuthService {
             );
         }
 
-        const emailInUse = await this.UserModel.findOne({
-            email: registrationData.email,
-        });
+        const emailInUse = await this.findByEmail(email);
 
         if (emailInUse) {
             throw new BadRequestException('Email already in use');
@@ -93,7 +103,7 @@ export class AuthService {
     async login(loginData: LoginDto, context: SessionContext = {}) {
         const { email, password } = loginData;
 
-        const user = await this.UserModel.findOne({ email });
+        const user = await this.findByEmail(email);
 
         if (!user) {
             throw new UnauthorizedException('Wrong Credentials');
@@ -232,7 +242,7 @@ export class AuthService {
     }
 
     async forgotPassword({ email }: { email: string }) {
-        const user = await this.UserModel.findOne({ email });
+        const user = await this.findByEmail(email);
         if (user) {
             const expiryDate = new Date();
             expiryDate.setDate(expiryDate.getDate() + 1);
@@ -247,7 +257,10 @@ export class AuthService {
                 expiryDate,
             });
 
-            await this.mailService.sendPasswordResetEmail(email, resetToken);
+            await this.mailService.sendPasswordResetEmail(
+                user.email,
+                resetToken,
+            );
         }
 
         return { message: 'If user exists, they will receive an email' };
@@ -305,9 +318,10 @@ export class AuthService {
         name: string;
         picture: string;
     }): Promise<User> {
-        const { email, name, picture } = profile;
+        const { name, picture } = profile;
+        const email = normaliseEmail(profile.email);
 
-        let user = await this.UserModel.findOne({ email });
+        let user = await this.findByEmail(email);
 
         if (!user) {
             user = await this.UserModel.create({
@@ -337,7 +351,8 @@ export class AuthService {
 
         return user;
     }
-    async requestEmailCode(email: string) {
+    async requestEmailCode(rawEmail: string) {
+        const email = normaliseEmail(rawEmail);
         const code = this.verificationService.createCode(email);
         await this.mailService.sendEmailVerificationCode(email, code);
         return { message: 'Verification code sent to email' };
