@@ -72,7 +72,7 @@ Shared guards, configuration, mail delivery, templates, and cross-cutting helper
 
 - Node.js 20 or newer
 - npm
-- MongoDB, either local or hosted
+- Docker for the local MongoDB, or any other MongoDB
 - SMTP credentials for email verification and password recovery
 - Google OAuth credentials if Google sign-in is required
 
@@ -83,10 +83,13 @@ git clone https://github.com/bohdanhora/finance-backend.git
 cd finance-backend
 npm ci
 cp .env.example .env
+npm run db:up
 npm run dev
 ```
 
 On Windows PowerShell, use `Copy-Item .env.example .env` instead of `cp`.
+
+`npm run db:up` starts MongoDB from `docker-compose.yml` on port 27017, and `.env.example` already points `MONGO_URL` at it. Production keeps its own `MONGO_URL` in the hosting environment, so a local run never touches production data. `npm run db:down` stops the container and keeps the data volume.
 
 The API starts at [http://localhost:8000](http://localhost:8000) by default. Configure the frontend with `NEXT_PUBLIC_API_URL=http://localhost:8000`.
 
@@ -99,6 +102,7 @@ The API starts at [http://localhost:8000](http://localhost:8000) by default. Con
 | `PORT` | `8000` | HTTP port used by NestJS. |
 | `FRONTEND_URL` | Production frontend | Destination used after a successful Google OAuth callback. |
 | `MONGO_URL` | - | MongoDB connection string. Required. |
+| `ADMIN_API_KEY` | - | At least 32 characters, shared with the admin panel. Empty answers `404` on every `/admin` route. |
 
 ### Authentication
 
@@ -184,6 +188,10 @@ Every `/transactions/*` route requires a valid Bearer token.
 | Streaks | `POST /streak/visit` |
 
 Routes in this table are relative to `/transactions`.
+
+### Admin routes
+
+`GET /admin/stats`, `GET /admin/users?search=&limit=&offset=` and `GET /admin/users/:id` serve the admin panel. They take the `X-Admin-Key` header instead of a Bearer token and never return passwords, tokens or saved bank keys.
 
 ## Available scripts
 

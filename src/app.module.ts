@@ -8,6 +8,7 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TransactionsModule } from './transactions/transactions.module';
 import config from './config/config';
 import { SessionsModule } from './sessions/sessions.module';
+import { AdminModule } from './admin/admin.module';
 
 @Module({
     imports: [
@@ -34,6 +35,7 @@ import { SessionsModule } from './sessions/sessions.module';
         SessionsModule,
         AuthModule,
         TransactionsModule,
+        AdminModule,
     ],
     controllers: [AppController],
     providers: [AppService],

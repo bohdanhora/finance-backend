@@ -14,6 +14,9 @@ export default () => ({
     connections: {
         secret: process.env.CONNECTIONS_SECRET || process.env.JWT_SECRET,
     },
+    admin: {
+        apiKey: process.env.ADMIN_API_KEY ?? '',
+    },
     database: {
         connectionString: process.env.MONGO_URL,
     },
