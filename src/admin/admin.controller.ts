@@ -1,7 +1,10 @@
 import {
     BadRequestException,
     Controller,
+    Delete,
     Get,
+    HttpCode,
+    HttpStatus,
     Param,
     Query,
     UseGuards,
@@ -48,5 +51,15 @@ export class AdminController {
         }
 
         return this.adminService.getUser(id);
+    }
+
+    @Delete('users/:id')
+    @HttpCode(HttpStatus.NO_CONTENT)
+    deleteUser(@Param('id') id: string): Promise<void> {
+        if (!isValidObjectId(id)) {
+            throw new BadRequestException('Invalid user id');
+        }
+
+        return this.adminService.deleteUser(id);
     }
 }

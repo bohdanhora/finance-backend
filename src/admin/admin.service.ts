@@ -1,6 +1,8 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { isValidObjectId, Model, Types } from 'mongoose';
+import { RefreshToken } from 'src/auth/schemas/refresh-token.schema';
+import { ResetToken } from 'src/auth/schemas/reset-token.schema';
 import { User, UserDocument } from 'src/auth/schemas/user.schema';
 import { Session, SessionDocument } from 'src/sessions/session.schema';
 import {
@@ -74,6 +76,10 @@ export class AdminService {
         private readonly sessions: Model<SessionDocument>,
         @InjectModel(AllTransactionsInfo.name)
         private readonly finances: Model<AllTransactionsInfoDocument>,
+        @InjectModel(RefreshToken.name)
+        private readonly refreshTokens: Model<RefreshToken>,
+        @InjectModel(ResetToken.name)
+        private readonly resetTokens: Model<ResetToken>,
     ) {}
 
     async getStats(): Promise<AdminStats> {
@@ -203,6 +209,22 @@ export class AdminService {
                 hasMore: query.offset + query.limit < total,
             },
         };
+    }
+
+    async deleteUser(id: string): Promise<void> {
+        const objectId = new Types.ObjectId(id);
+        const deleted = await this.users.findByIdAndDelete(objectId);
+
+        if (!deleted) {
+            throw new NotFoundException('User not found');
+        }
+
+        await Promise.all([
+            this.sessions.deleteMany({ userId: objectId }),
+            this.refreshTokens.deleteMany({ userId: objectId }),
+            this.resetTokens.deleteMany({ userId: objectId }),
+            this.finances.deleteMany({ userId: { $in: [id, objectId] } }),
+        ]);
     }
 
     async getUser(id: string): Promise<AdminUserDetail> {

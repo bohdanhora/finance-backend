@@ -191,7 +191,7 @@ Routes in this table are relative to `/transactions`.
 
 ### Admin routes
 
-`GET /admin/stats`, `GET /admin/users?search=&limit=&offset=` and `GET /admin/users/:id` serve the admin panel. They take the `X-Admin-Key` header instead of a Bearer token and never return passwords, tokens or saved bank keys.
+`GET /admin/stats`, `GET /admin/users?search=&limit=&offset=`, `GET /admin/users/:id` and `DELETE /admin/users/:id` serve the admin panel. Deleting a user also removes their sessions, tokens and finance data. They take the `X-Admin-Key` header instead of a Bearer token and never return passwords, tokens or saved bank keys.
 
 ## Available scripts
 

@@ -1,5 +1,13 @@
 import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
+import {
+    RefreshToken,
+    RefreshTokenSchema,
+} from 'src/auth/schemas/refresh-token.schema';
+import {
+    ResetToken,
+    ResetTokenSchema,
+} from 'src/auth/schemas/reset-token.schema';
 import { User, UserSchema } from 'src/auth/schemas/user.schema';
 import { Session, SessionSchema } from 'src/sessions/session.schema';
 import {
@@ -16,6 +24,8 @@ import { AdminService } from './admin.service';
         MongooseModule.forFeature([
             { name: User.name, schema: UserSchema },
             { name: Session.name, schema: SessionSchema },
+            { name: RefreshToken.name, schema: RefreshTokenSchema },
+            { name: ResetToken.name, schema: ResetTokenSchema },
             {
                 name: AllTransactionsInfo.name,
                 schema: AllTransactionsInfoSchema,
