@@ -128,6 +128,9 @@ const renewExpectedIncomes = (
             day: item.day,
             recurring: true,
             received: false,
+            ...(item.currency && typeof item.currencyAmount === 'number'
+                ? { currency: item.currency, currencyAmount: item.currencyAmount }
+                : {}),
         }));
 
 export const buildMonthSnapshot = (

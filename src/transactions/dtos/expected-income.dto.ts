@@ -1,6 +1,7 @@
 import { Type } from 'class-transformer';
 import {
     IsBoolean,
+    IsEnum,
     IsInt,
     IsNotEmpty,
     IsNumber,
@@ -12,6 +13,7 @@ import {
     ValidateIf,
     ValidateNested,
 } from 'class-validator';
+import { SavingsCurrency } from './savings.dto';
 
 export class ExpectedIncomeItemDto {
     @IsString()
@@ -36,6 +38,15 @@ export class ExpectedIncomeItemDto {
     /** Recurring incomes come back every month, one-offs are dropped. */
     @IsBoolean()
     recurring: boolean;
+
+    @IsOptional()
+    @IsEnum(SavingsCurrency)
+    currency?: SavingsCurrency;
+
+    @ValidateIf((dto: ExpectedIncomeItemDto) => dto.currency !== undefined)
+    @IsNumber()
+    @Min(0.01)
+    currencyAmount?: number;
 }
 
 /** The stored plan plus whether, and how much, actually arrived. */
