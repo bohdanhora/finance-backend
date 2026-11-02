@@ -78,6 +78,45 @@ describe('buildMonthRolloverUpdate', () => {
         expect(update).not.toHaveProperty('totalAmount');
     });
 
+    it('keeps the category of planned, template and carried bills', () => {
+        const update = buildMonthRolloverUpdate(
+            {
+                lastProcessedMonth: '2026-08',
+                defaultEssentialsArray: [
+                    { ...defaultEssentials[0], category: 'housing' },
+                ],
+                essentialsArray: [
+                    {
+                        id: 'netflix',
+                        amount: 300,
+                        title: 'Netflix',
+                        checked: false,
+                        category: 'subscriptions',
+                    },
+                ],
+                nextMonthEssentialsArray: [
+                    { ...nextMonthEssentialsArray[0], category: 'housing' },
+                ],
+            },
+            '2026-09',
+        );
+
+        expect(update?.essentialsArray).toEqual([
+            { ...nextMonthEssentialsArray[0], category: 'housing' },
+            {
+                id: 'netflix',
+                amount: 300,
+                title: 'Netflix',
+                checked: false,
+                carriedFrom: '2026-08',
+                category: 'subscriptions',
+            },
+        ]);
+        expect(update?.nextMonthEssentialsArray).toEqual([
+            { ...defaultEssentials[0], checked: false, category: 'housing' },
+        ]);
+    });
+
     it('falls back to the recurring template when next month was never planned', () => {
         const update = buildMonthRolloverUpdate(
             {

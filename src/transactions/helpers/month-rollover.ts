@@ -10,7 +10,10 @@ export const MONTH_HISTORY_LIMIT = 24;
 export type MonthSnapshot = {
     month: string;
     essentials: Array<
-        Pick<EssentialItemDto, 'id' | 'title' | 'amount' | 'checked'> & {
+        Pick<
+            EssentialItemDto,
+            'id' | 'title' | 'amount' | 'checked' | 'category'
+        > & {
             paidAmount?: number;
         }
     >;
@@ -64,6 +67,7 @@ const copyEssentials = (
             amount: item.amount,
             title: item.title,
             checked: resetChecked ? false : item.checked,
+            ...(item.category ? { category: item.category } : {}),
         };
 
         if (!resetChecked && item.checked) {
@@ -111,6 +115,7 @@ const carryUnpaidEssentials = (
                 title: item.title,
                 checked: false,
                 carriedFrom: item.carriedFrom ?? closingMonth,
+                ...(item.category ? { category: item.category } : {}),
             };
         });
 };
@@ -129,7 +134,10 @@ const renewExpectedIncomes = (
             recurring: true,
             received: false,
             ...(item.currency && typeof item.currencyAmount === 'number'
-                ? { currency: item.currency, currencyAmount: item.currencyAmount }
+                ? {
+                      currency: item.currency,
+                      currencyAmount: item.currencyAmount,
+                  }
                 : {}),
         }));
 
@@ -142,6 +150,7 @@ export const buildMonthSnapshot = (
         title: item.title,
         amount: item.amount,
         checked: item.checked,
+        ...(item.category ? { category: item.category } : {}),
         ...(item.checked && typeof item.paidAmount === 'number'
             ? { paidAmount: item.paidAmount }
             : {}),

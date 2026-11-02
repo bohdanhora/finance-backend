@@ -1,6 +1,9 @@
 import 'reflect-metadata';
 import { AuthenticatedRequest } from 'src/app.controller';
-import { EssentialsType } from './dtos/essential-payments.dto';
+import {
+    EssentialItemDto,
+    EssentialsType,
+} from './dtos/essential-payments.dto';
 import {
     SavingsCurrency,
     SavingsOperationType,
@@ -8,7 +11,7 @@ import {
 } from './dtos/savings.dto';
 import { CalculationService } from './helpers/calculation.service';
 import { TransactionsService } from './transactions.service';
-import { TransactionType } from './dtos/transaction.dto';
+import { TransactionDto, TransactionType } from './dtos/transaction.dto';
 
 describe('TransactionsService essential payments', () => {
     const request = {
@@ -112,6 +115,131 @@ describe('TransactionsService essential payments', () => {
             checked: false,
         });
         expect(undone.updatedTransactions).toHaveLength(0);
+    });
+});
+
+describe('TransactionsService essential categories', () => {
+    const request = {
+        userId: '507f1f77bcf86cd799439011',
+    } as AuthenticatedRequest;
+
+    const createService = (userData: Record<string, any>) => {
+        const transactionsModel = {
+            findOne: jest.fn().mockResolvedValue(userData),
+            updateOne: jest.fn().mockResolvedValue(undefined),
+        };
+        return new TransactionsService(
+            {} as never,
+            transactionsModel as never,
+            new CalculationService(),
+        );
+    };
+
+    const essentialsOf = (userData: Record<string, unknown>) =>
+        userData.essentialsArray as EssentialItemDto[];
+    const transactionsOf = (userData: Record<string, unknown>) =>
+        userData.transactions as TransactionDto[];
+
+    const createUserData = (category?: string) => {
+        const userData: Record<string, any> = {
+            totalAmount: 10_000,
+            totalIncome: 10_000,
+            totalSpend: 0,
+            essentialsArray: [
+                {
+                    id: 'netflix',
+                    title: 'Netflix',
+                    amount: 300,
+                    checked: false,
+                    ...(category ? { category } : {}),
+                },
+            ],
+            nextMonthEssentialsArray: [],
+            transactions: [],
+            set: jest.fn((field: string, value: unknown) => {
+                userData[field] = value;
+            }),
+            save: jest.fn().mockResolvedValue(undefined),
+        };
+        return userData;
+    };
+
+    it('books the payment under the bill category and marks it essential', async () => {
+        const userData = createUserData('subscriptions');
+        const paid = await createService(userData).setCheckedEssentalPayments(
+            {
+                type: EssentialsType.THIS_MONTH,
+                item: { id: 'netflix', checked: true, actualAmount: 300 },
+            },
+            request,
+        );
+
+        expect(paid.updatedTransactions[0]).toEqual(
+            expect.objectContaining({
+                categorie: 'subscriptions',
+                essential: true,
+            }),
+        );
+    });
+
+    it('moves an already paid bill and its transaction to a new category', async () => {
+        const userData = createUserData();
+        const service = createService(userData);
+        await service.setCheckedEssentalPayments(
+            {
+                type: EssentialsType.THIS_MONTH,
+                item: { id: 'netflix', checked: true, actualAmount: 300 },
+            },
+            request,
+        );
+        expect(transactionsOf(userData)[0].categorie).toBe('essentials');
+
+        const paidItem = essentialsOf(userData)[0];
+        const updated = await service.updateEssential(
+            {
+                type: EssentialsType.THIS_MONTH,
+                item: { ...paidItem, category: 'subscriptions' },
+            },
+            request,
+        );
+
+        expect(updated.updatedItems[0]).toEqual(
+            expect.objectContaining({
+                checked: true,
+                paidAmount: 300,
+                category: 'subscriptions',
+            }),
+        );
+        expect(updated.updatedTransactions?.[0]).toEqual(
+            expect.objectContaining({
+                categorie: 'subscriptions',
+                essential: true,
+                value: 300,
+            }),
+        );
+        expect(userData.totalAmount).toBe(9_700);
+    });
+
+    it('still refuses to change the amount of a paid bill', async () => {
+        const userData = createUserData();
+        const service = createService(userData);
+        await service.setCheckedEssentalPayments(
+            {
+                type: EssentialsType.THIS_MONTH,
+                item: { id: 'netflix', checked: true, actualAmount: 300 },
+            },
+            request,
+        );
+
+        await expect(
+            service.updateEssential(
+                {
+                    type: EssentialsType.THIS_MONTH,
+                    item: { ...essentialsOf(userData)[0], amount: 500 },
+                },
+                request,
+            ),
+        ).rejects.toThrow('Reverse the essential payment before updating it');
     });
 });
 

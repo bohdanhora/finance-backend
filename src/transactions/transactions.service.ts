@@ -72,6 +72,7 @@ import {
 } from './helpers/cards';
 
 const SAVINGS_CATEGORY = 'savings';
+const ESSENTIALS_CATEGORY = 'essentials';
 const INCOME_CATEGORY = 'income';
 
 const byPayday = (items: ExpectedIncomeRecord[]) =>
@@ -557,9 +558,10 @@ export class TransactionsService {
                 id: transactionId,
                 value: item.actualAmount,
                 date: paidAt,
-                categorie: 'essentials',
+                categorie: essential.category || ESSENTIALS_CATEGORY,
                 description: essential.title,
                 cardId: card.id,
+                essential: true,
             };
 
             updatedCards = this.moveCardMoney(
@@ -740,9 +742,47 @@ export class TransactionsService {
             throw new BadRequestException('Essential not found');
         }
         if (currentEssential.checked) {
-            throw new BadRequestException(
-                'Reverse the essential payment before updating it',
+            if (
+                !item.checked ||
+                item.title !== currentEssential.title ||
+                item.amount !== currentEssential.amount
+            ) {
+                throw new BadRequestException(
+                    'Reverse the essential payment before updating it',
+                );
+            }
+
+            const paidEssential: EssentialItemDto = {
+                ...currentEssential,
+                category: item.category || undefined,
+            };
+            if (!paidEssential.category) delete paidEssential.category;
+
+            const updatedItems = currentItems.map((essential) =>
+                essential.id === item.id ? paidEssential : essential,
             );
+            const updatedTransactions = userData.transactions.map(
+                (transaction) =>
+                    transaction.id === currentEssential.paymentTransactionId
+                        ? {
+                              ...transaction,
+                              categorie:
+                                  paidEssential.category || ESSENTIALS_CATEGORY,
+                              essential: true,
+                          }
+                        : transaction,
+            );
+
+            userData.set(updateFieldName, updatedItems);
+            userData.transactions = updatedTransactions;
+            await userData.save();
+
+            return {
+                message: 'Essential updated',
+                updatedItem: paidEssential,
+                updatedItems,
+                updatedTransactions,
+            };
         }
 
         const updatedItems = currentItems.map((essential) =>

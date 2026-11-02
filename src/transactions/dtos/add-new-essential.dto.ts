@@ -2,7 +2,9 @@ import {
     IsBoolean,
     IsEnum,
     IsNumber,
+    IsOptional,
     IsString,
+    MaxLength,
     ValidateNested,
 } from 'class-validator';
 import { EssentialsType } from './essential-payments.dto';
@@ -20,6 +22,11 @@ export class NewEssentialItemDto {
 
     @IsBoolean()
     checked: boolean;
+
+    @IsOptional()
+    @IsString()
+    @MaxLength(64)
+    category?: string;
 }
 
 export class NewEssentialDto {

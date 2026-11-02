@@ -8,6 +8,7 @@ import {
     IsEnum,
     IsOptional,
     IsDateString,
+    MaxLength,
 } from 'class-validator';
 
 export class EssentialItemDto {
@@ -22,6 +23,11 @@ export class EssentialItemDto {
 
     @IsBoolean()
     checked: boolean;
+
+    @IsOptional()
+    @IsString()
+    @MaxLength(64)
+    category?: string;
 
     @IsOptional()
     @IsNumber()
