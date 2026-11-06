@@ -164,6 +164,26 @@ describe('TransactionsService essential categories', () => {
         return userData;
     };
 
+    it('clears unpaid bills at once and keeps the paid ones', async () => {
+        const userData = createUserData();
+        const paid = {
+            id: 'paid',
+            title: 'Paid',
+            amount: 100,
+            checked: true,
+            paidAmount: 100,
+        };
+        userData.essentialsArray.push(paid);
+
+        const result = await createService(userData).clearEssentials(
+            { type: EssentialsType.THIS_MONTH },
+            request,
+        );
+
+        expect(result.removedCount).toBe(1);
+        expect(result.updatedItems).toEqual([paid]);
+    });
+
     it('books the payment under the bill category and marks it essential', async () => {
         const userData = createUserData('subscriptions');
         const paid = await createService(userData).setCheckedEssentalPayments(
@@ -422,6 +442,32 @@ describe('TransactionsService expected incomes', () => {
         await expect(
             service.removeExpectedIncome('salary-15', request),
         ).rejects.toThrow('Mark the income as not received');
+    });
+
+    it('clears the list in one write and keeps received incomes', async () => {
+        const { service, transactionsModel, userData } = createService();
+        const received = {
+            id: 'bonus-1',
+            title: 'Bonus',
+            amount: 5_000,
+            day: 1,
+            recurring: false,
+            received: true,
+        };
+        userData.expectedIncomes = [
+            ...(userData.expectedIncomes as object[]),
+            received,
+        ];
+
+        const result = await service.clearExpectedIncomes(request);
+
+        expect(result.removedCount).toBe(1);
+        expect(result.updatedItems).toEqual([received]);
+        expect(transactionsModel.updateOne).toHaveBeenCalledTimes(1);
+        expect(transactionsModel.updateOne).toHaveBeenCalledWith(
+            { userId: request.userId },
+            { $set: { expectedIncomes: [received] } },
+        );
     });
 });
 

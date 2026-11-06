@@ -21,6 +21,7 @@ import { NextMonthTotalAmountDto } from './dtos/next-month-total-amount.dto';
 import { CalculationService } from './helpers/calculation.service';
 import { EssentialCheckedDto } from './dtos/essential-checked.dto';
 import { RemoveEssentialDto } from './dtos/remove-essential.dto';
+import { ClearEssentialsDto } from './dtos/clear-essentials.dto';
 import { NewEssentialDto } from './dtos/add-new-essential.dto';
 import { ClearAllInfoDto } from './dtos/clear-all-info';
 import { SetPercentDto } from './dtos/percent';
@@ -697,6 +698,32 @@ export class TransactionsService {
         };
     }
 
+    async clearEssentials(
+        { type }: ClearEssentialsDto,
+        req: AuthenticatedRequest,
+    ) {
+        const userId = this.getUserIdOrThrow(req);
+        const updateFieldName = this.getUpdateFieldName(type);
+
+        const userData = await this.getUserDataOrThrow(userId);
+        const currentItems =
+            (userData[updateFieldName] as EssentialItemDto[]) || [];
+        const updatedItems = currentItems.filter(
+            (essential) => essential.checked,
+        );
+
+        await this.AllTransactionsInfoModel.updateOne(
+            { userId },
+            { $set: { [updateFieldName]: updatedItems } },
+        );
+
+        return {
+            message: 'Essentials cleared',
+            removedCount: currentItems.length - updatedItems.length,
+            updatedItems,
+        };
+    }
+
     async addNewEssential(
         { type, item }: NewEssentialDto,
         req: AuthenticatedRequest,
@@ -881,6 +908,24 @@ export class TransactionsService {
         );
 
         return { message: 'Expected income removed', updatedItems };
+    }
+
+    async clearExpectedIncomes(req: AuthenticatedRequest) {
+        const userId = this.getUserIdOrThrow(req);
+        const userData = await this.getUserDataOrThrow(userId);
+        const incomes = this.getExpectedIncomes(userData);
+        const updatedItems = incomes.filter((income) => income.received);
+
+        await this.AllTransactionsInfoModel.updateOne(
+            { userId },
+            { $set: { expectedIncomes: updatedItems } },
+        );
+
+        return {
+            message: 'Expected incomes cleared',
+            removedCount: incomes.length - updatedItems.length,
+            updatedItems,
+        };
     }
 
     /**

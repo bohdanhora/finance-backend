@@ -35,7 +35,7 @@ export class NewEssentialItemDto {
     @IsEnum(SavingsCurrency)
     currency?: SavingsCurrency;
 
-    @ValidateIf((dto: NewEssentialItemDto) => dto.currency !== undefined)
+    @ValidateIf((dto: NewEssentialItemDto) => dto.currency != null)
     @IsNumber()
     @Min(0.01)
     currencyAmount?: number;

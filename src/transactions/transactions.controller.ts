@@ -19,6 +19,7 @@ import { EssentialsArrayDto } from './dtos/essential-payments.dto';
 import { TransactionDto } from './dtos/transaction.dto';
 import { EssentialCheckedDto } from './dtos/essential-checked.dto';
 import { RemoveEssentialDto } from './dtos/remove-essential.dto';
+import { ClearEssentialsDto } from './dtos/clear-essentials.dto';
 import { NewEssentialDto } from './dtos/add-new-essential.dto';
 import { ClearAllInfoDto } from './dtos/clear-all-info';
 import { SetPercentDto } from './dtos/percent';
@@ -124,6 +125,14 @@ export class TransactionsController {
         );
     }
 
+    @Put('clear-essentials')
+    async clearEssentials(
+        @Body() data: ClearEssentialsDto,
+        @Req() req: AuthenticatedRequest,
+    ) {
+        return this.transactionsService.clearEssentials(data, req);
+    }
+
     @Post('new-essential')
     async addNewEssential(
         @Body() newEssentialData: NewEssentialDto,
@@ -165,6 +174,11 @@ export class TransactionsController {
         @Req() req: AuthenticatedRequest,
     ) {
         return this.transactionsService.setExpectedIncomeReceived(data, req);
+    }
+
+    @Delete('expected-incomes')
+    async clearExpectedIncomes(@Req() req: AuthenticatedRequest) {
+        return this.transactionsService.clearExpectedIncomes(req);
     }
 
     @Delete('expected-incomes/:id')
