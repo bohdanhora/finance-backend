@@ -1,8 +1,10 @@
+import 'reflect-metadata';
 import {
     MONTH_HISTORY_LIMIT,
     MonthSnapshot,
     buildMonthRolloverUpdate,
 } from './month-rollover';
+import { SavingsCurrency } from '../dtos/savings.dto';
 
 const defaultEssentials = [
     {
@@ -114,6 +116,49 @@ describe('buildMonthRolloverUpdate', () => {
         ]);
         expect(update?.nextMonthEssentialsArray).toEqual([
             { ...defaultEssentials[0], checked: false, category: 'housing' },
+        ]);
+    });
+
+    it('keeps the foreign amount of planned, template and carried bills', () => {
+        const foreign = {
+            currency: SavingsCurrency.USD,
+            currencyAmount: 20,
+        };
+        const update = buildMonthRolloverUpdate(
+            {
+                lastProcessedMonth: '2026-08',
+                defaultEssentialsArray: [
+                    { ...defaultEssentials[0], ...foreign },
+                ],
+                essentialsArray: [
+                    {
+                        id: 'claude',
+                        amount: 830,
+                        title: 'Claude',
+                        checked: false,
+                        ...foreign,
+                    },
+                ],
+                nextMonthEssentialsArray: [
+                    { ...nextMonthEssentialsArray[0], ...foreign },
+                ],
+            },
+            '2026-09',
+        );
+
+        expect(update?.essentialsArray).toEqual([
+            { ...nextMonthEssentialsArray[0], ...foreign },
+            {
+                id: 'claude',
+                amount: 830,
+                title: 'Claude',
+                checked: false,
+                carriedFrom: '2026-08',
+                ...foreign,
+            },
+        ]);
+        expect(update?.nextMonthEssentialsArray).toEqual([
+            { ...defaultEssentials[0], checked: false, ...foreign },
         ]);
     });
 

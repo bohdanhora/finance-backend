@@ -9,7 +9,10 @@ import {
     IsOptional,
     IsDateString,
     MaxLength,
+    Min,
+    ValidateIf,
 } from 'class-validator';
+import { SavingsCurrency } from './savings.dto';
 
 export class EssentialItemDto {
     @IsString()
@@ -28,6 +31,15 @@ export class EssentialItemDto {
     @IsString()
     @MaxLength(64)
     category?: string;
+
+    @IsOptional()
+    @IsEnum(SavingsCurrency)
+    currency?: SavingsCurrency;
+
+    @ValidateIf((dto: EssentialItemDto) => dto.currency !== undefined)
+    @IsNumber()
+    @Min(0.01)
+    currencyAmount?: number;
 
     @IsOptional()
     @IsNumber()

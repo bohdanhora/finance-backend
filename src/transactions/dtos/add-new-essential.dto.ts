@@ -5,9 +5,12 @@ import {
     IsOptional,
     IsString,
     MaxLength,
+    Min,
+    ValidateIf,
     ValidateNested,
 } from 'class-validator';
 import { EssentialsType } from './essential-payments.dto';
+import { SavingsCurrency } from './savings.dto';
 import { Type } from 'class-transformer';
 
 export class NewEssentialItemDto {
@@ -27,6 +30,15 @@ export class NewEssentialItemDto {
     @IsString()
     @MaxLength(64)
     category?: string;
+
+    @IsOptional()
+    @IsEnum(SavingsCurrency)
+    currency?: SavingsCurrency;
+
+    @ValidateIf((dto: NewEssentialItemDto) => dto.currency !== undefined)
+    @IsNumber()
+    @Min(0.01)
+    currencyAmount?: number;
 }
 
 export class NewEssentialDto {

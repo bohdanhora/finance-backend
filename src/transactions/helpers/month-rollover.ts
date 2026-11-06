@@ -57,6 +57,14 @@ const monthIndex = (month: string): number => {
 export const getMonthDifference = (from: string, to: string): number =>
     monthIndex(to) - monthIndex(from);
 
+const foreignAmountOf = ({
+    currency,
+    currencyAmount,
+}: EssentialItemDto): Pick<EssentialItemDto, 'currency' | 'currencyAmount'> =>
+    currency && typeof currencyAmount === 'number'
+        ? { currency, currencyAmount }
+        : {};
+
 const copyEssentials = (
     items: EssentialItemDto[] = [],
     resetChecked = false,
@@ -68,6 +76,7 @@ const copyEssentials = (
             title: item.title,
             checked: resetChecked ? false : item.checked,
             ...(item.category ? { category: item.category } : {}),
+            ...foreignAmountOf(item),
         };
 
         if (!resetChecked && item.checked) {
@@ -116,6 +125,7 @@ const carryUnpaidEssentials = (
                 checked: false,
                 carriedFrom: item.carriedFrom ?? closingMonth,
                 ...(item.category ? { category: item.category } : {}),
+                ...foreignAmountOf(item),
             };
         });
 };

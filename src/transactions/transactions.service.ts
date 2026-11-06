@@ -1511,6 +1511,13 @@ export class TransactionsService {
                     amount: item.amount,
                     title: item.title,
                     checked: false,
+                    ...(item.currency &&
+                    typeof item.currencyAmount === 'number'
+                        ? {
+                              currency: item.currency,
+                              currencyAmount: item.currencyAmount,
+                          }
+                        : {}),
                 }));
 
             updateData.cards = this.prepareCards(userData).map((card) => ({
