@@ -1,4 +1,6 @@
 import {
+    ArrayMaxSize,
+    IsArray,
     IsIn,
     IsObject,
     IsOptional,
@@ -40,4 +42,20 @@ export class MonobankTokenDto {
     @MinLength(1)
     @MaxLength(200)
     token: string;
+}
+
+export interface StatisticsPreferences {
+    hiddenCategories: string[];
+    categoryLimits: Record<string, number>;
+}
+
+export class StatisticsPreferencesDto {
+    @IsArray()
+    @ArrayMaxSize(100)
+    @IsString({ each: true })
+    @MaxLength(60, { each: true })
+    hiddenCategories: string[];
+
+    @IsObject()
+    categoryLimits: Record<string, number>;
 }

@@ -12,8 +12,10 @@ import { AllTransactionsInfo } from './schemas/all-info.schema';
 import {
     AssistantPreferencesDto,
     MonobankTokenDto,
+    StatisticsPreferencesDto,
 } from './dtos/connections.dto';
 import { normalizeAssistantPreferences } from './helpers/assistant-preferences';
+import { normalizeStatisticsPreferences } from './helpers/statistics-preferences';
 import {
     decryptSecret,
     deriveEncryptionKey,
@@ -67,6 +69,7 @@ export class ConnectionsService {
         return {
             assistant: userData.assistantPreferences || null,
             monobankToken: this.readToken(userData.monobankToken),
+            statistics: userData.statisticsPreferences || null,
         };
     }
 
@@ -85,6 +88,24 @@ export class ConnectionsService {
         return {
             message: 'Assistant preferences saved',
             assistant,
+        };
+    }
+
+    async setStatisticsPreferences(
+        data: StatisticsPreferencesDto,
+        req: AuthenticatedRequest,
+    ) {
+        const userId = this.getUserIdOrThrow(req);
+        const statistics = normalizeStatisticsPreferences(data);
+
+        await this.AllTransactionsInfoModel.updateOne(
+            { userId },
+            { $set: { statisticsPreferences: statistics } },
+        );
+
+        return {
+            message: 'Statistics preferences saved',
+            statistics,
         };
     }
 

@@ -46,6 +46,7 @@ describe('ConnectionsService', () => {
         await expect(service.getConnections(request)).resolves.toEqual({
             assistant: null,
             monobankToken: 'uToken123',
+            statistics: null,
         });
     });
 
@@ -58,6 +59,7 @@ describe('ConnectionsService', () => {
         await expect(service.getConnections(request)).resolves.toEqual({
             assistant: null,
             monobankToken: null,
+            statistics: null,
         });
     });
 
@@ -105,6 +107,34 @@ describe('ConnectionsService', () => {
         await expect(service.getConnections(request)).resolves.toEqual({
             assistant: saved.assistant,
             monobankToken: null,
+            statistics: null,
+        });
+    });
+
+    it('keeps hidden categories and positive limits for statistics', async () => {
+        const { service } = createService('secret');
+
+        const saved = await service.setStatisticsPreferences(
+            {
+                hiddenCategories: [' housing ', 'housing', '', 'savings'],
+                categoryLimits: {
+                    restaurant: 3000.456,
+                    groceries: 0,
+                    transport: -5,
+                    clothing: 'abc' as unknown as number,
+                },
+            },
+            request,
+        );
+
+        expect(saved.statistics).toEqual({
+            hiddenCategories: ['housing', 'savings'],
+            categoryLimits: { restaurant: 3000.46 },
+        });
+        await expect(service.getConnections(request)).resolves.toEqual({
+            assistant: null,
+            monobankToken: null,
+            statistics: saved.statistics,
         });
     });
 });

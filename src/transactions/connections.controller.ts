@@ -13,6 +13,7 @@ import { ConnectionsService } from './connections.service';
 import {
     AssistantPreferencesDto,
     MonobankTokenDto,
+    StatisticsPreferencesDto,
 } from './dtos/connections.dto';
 
 @UseGuards(AuthGuard)
@@ -31,6 +32,14 @@ export class ConnectionsController {
         @Req() req: AuthenticatedRequest,
     ) {
         return this.connectionsService.setAssistantPreferences(data, req);
+    }
+
+    @Put('statistics')
+    async setStatisticsPreferences(
+        @Body() data: StatisticsPreferencesDto,
+        @Req() req: AuthenticatedRequest,
+    ) {
+        return this.connectionsService.setStatisticsPreferences(data, req);
     }
 
     @Put('monobank')

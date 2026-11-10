@@ -12,7 +12,10 @@ import {
 import { Streak, StreakSchema } from './streak.schema';
 import { ExpectedIncomeRecord } from '../dtos/expected-income.dto';
 import { MonthSnapshot } from '../helpers/month-rollover';
-import { AssistantPreferences } from '../dtos/connections.dto';
+import {
+    AssistantPreferences,
+    StatisticsPreferences,
+} from '../dtos/connections.dto';
 import { EncryptedSecret } from '../helpers/secret-cipher';
 import { CardRecord } from '../helpers/cards';
 
@@ -56,6 +59,8 @@ export class AllTransactionsInfo {
     streak?: Streak;
     @Prop({ type: Object })
     assistantPreferences?: AssistantPreferences;
+    @Prop({ type: Object })
+    statisticsPreferences?: StatisticsPreferences;
     @Prop({ type: Object, select: false })
     monobankToken?: EncryptedSecret;
 }
