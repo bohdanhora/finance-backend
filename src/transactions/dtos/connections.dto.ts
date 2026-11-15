@@ -46,6 +46,7 @@ export class MonobankTokenDto {
 
 export interface StatisticsPreferences {
     hiddenCategories: string[];
+    hiddenTransactions: string[];
     categoryLimits: Record<string, number>;
 }
 
@@ -55,6 +56,13 @@ export class StatisticsPreferencesDto {
     @IsString({ each: true })
     @MaxLength(60, { each: true })
     hiddenCategories: string[];
+
+    @IsOptional()
+    @IsArray()
+    @ArrayMaxSize(1000)
+    @IsString({ each: true })
+    @MaxLength(100, { each: true })
+    hiddenTransactions?: string[];
 
     @IsObject()
     categoryLimits: Record<string, number>;

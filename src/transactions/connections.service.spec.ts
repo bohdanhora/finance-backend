@@ -111,6 +111,25 @@ describe('ConnectionsService', () => {
         });
     });
 
+    it('keeps unique hidden transactions for statistics', async () => {
+        const { service } = createService('secret');
+
+        const saved = await service.setStatisticsPreferences(
+            {
+                hiddenCategories: [],
+                hiddenTransactions: [' tx-1 ', 'tx-1', '', 'tx-2'],
+                categoryLimits: {},
+            },
+            request,
+        );
+
+        expect(saved.statistics).toEqual({
+            hiddenCategories: [],
+            hiddenTransactions: ['tx-1', 'tx-2'],
+            categoryLimits: {},
+        });
+    });
+
     it('keeps hidden categories and positive limits for statistics', async () => {
         const { service } = createService('secret');
 
@@ -129,6 +148,7 @@ describe('ConnectionsService', () => {
 
         expect(saved.statistics).toEqual({
             hiddenCategories: ['housing', 'savings'],
+            hiddenTransactions: [],
             categoryLimits: { restaurant: 3000.46 },
         });
         await expect(service.getConnections(request)).resolves.toEqual({
