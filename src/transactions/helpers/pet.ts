@@ -1,3 +1,4 @@
+import { ACHIEVEMENT_REWARDS } from './achievements';
 import { getDayDifference, isDayKey } from './streak';
 
 export const PET_SPECIES = ['bulldog', 'monkey', 'sphynx'] as const;
@@ -6,33 +7,73 @@ export type PetSpecies = (typeof PET_SPECIES)[number];
 
 export type PetSlot = 'head' | 'eyes' | 'neck' | 'background';
 
+export type PetRarity = 'common' | 'rare' | 'epic' | 'legendary';
+
 export type PetItem = {
     id: string;
     slot: PetSlot;
     price: number;
+    rarity: PetRarity;
 };
 
+export const rarityForPrice = (price: number): PetRarity => {
+    if (price >= 4500) return 'legendary';
+    if (price >= 1500) return 'epic';
+    if (price >= 600) return 'rare';
+    return 'common';
+};
+
+const item = (id: string, slot: PetSlot, price: number): PetItem => ({
+    id,
+    slot,
+    price,
+    rarity: rarityForPrice(price),
+});
+
 export const PET_ITEMS: PetItem[] = [
-    { id: 'cap', slot: 'head', price: 80 },
-    { id: 'beanie', slot: 'head', price: 100 },
-    { id: 'party', slot: 'head', price: 120 },
-    { id: 'beret', slot: 'head', price: 140 },
-    { id: 'chef', slot: 'head', price: 180 },
-    { id: 'cowboy', slot: 'head', price: 220 },
-    { id: 'tophat', slot: 'head', price: 300 },
-    { id: 'shades', slot: 'eyes', price: 90 },
-    { id: 'round', slot: 'eyes', price: 110 },
-    { id: 'hearts', slot: 'eyes', price: 130 },
-    { id: 'monocle', slot: 'eyes', price: 160 },
-    { id: 'bandana', slot: 'neck', price: 60 },
-    { id: 'bowtie', slot: 'neck', price: 90 },
-    { id: 'scarf', slot: 'neck', price: 120 },
-    { id: 'chain', slot: 'neck', price: 250 },
-    { id: 'room', slot: 'background', price: 0 },
-    { id: 'park', slot: 'background', price: 150 },
-    { id: 'beach', slot: 'background', price: 200 },
-    { id: 'night', slot: 'background', price: 200 },
-    { id: 'space', slot: 'background', price: 300 },
+    item('cap', 'head', 80),
+    item('beanie', 'head', 100),
+    item('party', 'head', 120),
+    item('beret', 'head', 140),
+    item('chef', 'head', 180),
+    item('cowboy', 'head', 220),
+    item('tophat', 'head', 300),
+    item('bunny', 'head', 600),
+    item('flowers', 'head', 700),
+    item('headphones', 'head', 900),
+    item('viking', 'head', 1800),
+    item('wizard', 'head', 2200),
+    item('halo', 'head', 5000),
+    item('crown', 'head', 8000),
+    item('shades', 'eyes', 90),
+    item('round', 'eyes', 110),
+    item('hearts', 'eyes', 130),
+    item('monocle', 'eyes', 160),
+    item('stars', 'eyes', 650),
+    item('pixel', 'eyes', 1000),
+    item('vr', 'eyes', 1600),
+    item('laser', 'eyes', 4500),
+    item('bandana', 'neck', 60),
+    item('bowtie', 'neck', 90),
+    item('scarf', 'neck', 120),
+    item('chain', 'neck', 250),
+    item('tie', 'neck', 600),
+    item('lei', 'neck', 700),
+    item('medal', 'neck', 900),
+    item('pearls', 'neck', 1500),
+    item('diamond', 'neck', 6000),
+    item('room', 'background', 0),
+    item('park', 'background', 150),
+    item('beach', 'background', 200),
+    item('night', 'background', 200),
+    item('space', 'background', 300),
+    item('sunset', 'background', 700),
+    item('city', 'background', 800),
+    item('mountains', 'background', 900),
+    item('aurora', 'background', 2000),
+    item('underwater', 'background', 2400),
+    item('neon', 'background', 3000),
+    item('vault', 'background', 7500),
 ];
 
 export const PET_SLOTS: PetSlot[] = ['head', 'eyes', 'neck', 'background'];
@@ -77,13 +118,16 @@ export type PetRewardKind =
     | 'log'
     | 'save'
     | 'bills'
-    | 'streak';
+    | 'streak'
+    | 'achievement';
 
 export type PetReward = {
     key: string;
     kind: PetRewardKind;
     amount: number;
     days?: number;
+    achievement?: string;
+    tier?: number;
 };
 
 export type PetActivity = {
@@ -93,6 +137,7 @@ export type PetActivity = {
     transactions: { date: Date | string; transactionType: string }[];
     savings: { date: string; type: string }[];
     bills: { checked: boolean }[];
+    achievements?: { id: string; tier: number }[];
 };
 
 export const isPetSpecies = (value: unknown): value is PetSpecies =>
@@ -258,6 +303,18 @@ export const collectPetRewards = (
             kind: 'bills',
             amount: REWARDS.bills,
         });
+    }
+
+    for (const { id, tier } of activity.achievements ?? []) {
+        for (let level = 1; level <= tier; level++) {
+            grant({
+                key: `ach:${id}:${level}`,
+                kind: 'achievement',
+                amount: ACHIEVEMENT_REWARDS[level - 1] ?? 0,
+                achievement: id,
+                tier: level,
+            });
+        }
     }
 
     const total = granted.reduce((sum, reward) => sum + reward.amount, 0);

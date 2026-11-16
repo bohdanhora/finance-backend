@@ -25,7 +25,19 @@ import {
     renamePet,
     toPublicPet,
 } from './helpers/pet';
-import { resolveVisitDay } from './helpers/streak';
+import { resolveVisitDay, toDayKey } from './helpers/streak';
+import { ACHIEVEMENT_REWARDS, buildAchievements } from './helpers/achievements';
+
+type UserData = Pick<
+    AllTransactionsInfo,
+    | 'transactions'
+    | 'savingsOperations'
+    | 'savingsGoals'
+    | 'cards'
+    | 'essentialsArray'
+    | 'monthHistory'
+    | 'streak'
+>;
 
 const PURCHASE_ERRORS = {
     unknown: 'Unknown item',
@@ -75,9 +87,30 @@ export class PetService {
         );
     }
 
-    private respond(pet: PetState, extra: Record<string, unknown> = {}) {
+    private achievements(userData: UserData, pet: PetState) {
+        return buildAchievements({
+            today: toDayKey(),
+            transactions: userData.transactions || [],
+            savings: userData.savingsOperations || [],
+            goals: userData.savingsGoals || [],
+            cards: userData.cards || [],
+            bills: userData.essentialsArray || [],
+            monthHistory: userData.monthHistory || [],
+            bestStreak: userData.streak?.best ?? 0,
+            ownedItems: pet.owned,
+            coinsEarned: pet.earned,
+        });
+    }
+
+    private respond(
+        userData: UserData,
+        pet: PetState,
+        extra: Record<string, unknown> = {},
+    ) {
         return {
             pet: toPublicPet(pet),
+            achievements: this.achievements(userData, pet),
+            achievementRewards: ACHIEVEMENT_REWARDS,
             catalog: PET_ITEMS,
             freeze: { price: FREEZE_PRICE, limit: FREEZE_LIMIT },
             ...extra,
@@ -87,7 +120,7 @@ export class PetService {
     async getPet(req: AuthenticatedRequest) {
         const userId = this.getUserIdOrThrow(req);
         const userData = await this.load(userId);
-        return this.respond(this.readPet(userData));
+        return this.respond(userData, this.readPet(userData));
     }
 
     async sync({ day, offset }: PetSyncDto, req: AuthenticatedRequest) {
@@ -107,13 +140,14 @@ export class PetService {
             transactions: userData.transactions || [],
             savings: userData.savingsOperations || [],
             bills: userData.essentialsArray || [],
+            achievements: this.achievements(userData, pet),
         });
 
         if (granted.length > 0) {
             await this.save(userId, state);
         }
 
-        return this.respond(state, { granted });
+        return this.respond(userData, state, { granted });
     }
 
     async buy({ itemId }: PetBuyDto, req: AuthenticatedRequest) {
@@ -126,7 +160,7 @@ export class PetService {
         }
 
         await this.save(userId, result.state);
-        return this.respond(result.state);
+        return this.respond(userData, result.state);
     }
 
     async equip({ slot, itemId }: PetEquipDto, req: AuthenticatedRequest) {
@@ -139,7 +173,7 @@ export class PetService {
         }
 
         await this.save(userId, next);
-        return this.respond(next);
+        return this.respond(userData, next);
     }
 
     async updateProfile(
@@ -154,6 +188,6 @@ export class PetService {
         if (name !== undefined) pet = renamePet(pet, name);
 
         await this.save(userId, pet);
-        return this.respond(pet);
+        return this.respond(userData, pet);
     }
 }
