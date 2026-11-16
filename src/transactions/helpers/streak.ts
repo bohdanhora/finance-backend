@@ -21,6 +21,7 @@ export type StreakVisit = {
     changed: boolean;
     /** The milestone this visit reached, when it deserves an announcement. */
     reached: number | null;
+    frozen?: number;
 };
 
 export const toDayKey = (date = new Date()): string =>
@@ -57,6 +58,7 @@ export const resolveVisitDay = (day: string, today = toDayKey()): string =>
 export const registerStreakVisit = (
     stored: StreakState | null | undefined,
     day: string,
+    freezes = 0,
 ): StreakVisit => {
     if (!stored || !isDayKey(stored.lastVisit)) {
         return {
@@ -81,7 +83,9 @@ export const registerStreakVisit = (
         return { streak: stored, changed: false, reached: null };
     }
 
-    const current = gap === 1 ? stored.current + 1 : 1;
+    const missed = gap - 1;
+    const frozen = missed > 0 && freezes >= missed ? missed : 0;
+    const current = gap === 1 || frozen ? stored.current + 1 : 1;
 
     // A broken streak drops the milestones above the new count, so climbing
     // back to ten days is announced again.
@@ -105,5 +109,6 @@ export const registerStreakVisit = (
         },
         changed: true,
         reached,
+        ...(frozen ? { frozen } : {}),
     };
 };

@@ -18,6 +18,7 @@ import {
 } from '../dtos/connections.dto';
 import { EncryptedSecret } from '../helpers/secret-cipher';
 import { CardRecord } from '../helpers/cards';
+import { PetState } from '../helpers/pet';
 
 @Schema()
 export class AllTransactionsInfo {
@@ -57,6 +58,8 @@ export class AllTransactionsInfo {
     savingsOperations: SavingsOperation[];
     @Prop({ type: StreakSchema })
     streak?: Streak;
+    @Prop({ type: Object })
+    pet?: PetState;
     @Prop({ type: Object })
     assistantPreferences?: AssistantPreferences;
     @Prop({ type: Object })

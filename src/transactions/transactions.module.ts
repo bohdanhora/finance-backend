@@ -13,6 +13,8 @@ import { ConnectionsController } from './connections.controller';
 import { ConnectionsService } from './connections.service';
 import { CardsController } from './cards.controller';
 import { CardsService } from './cards.service';
+import { PetController } from './pet.controller';
+import { PetService } from './pet.service';
 
 @Module({
     imports: [
@@ -30,12 +32,14 @@ import { CardsService } from './cards.service';
     controllers: [
         ConnectionsController,
         CardsController,
+        PetController,
         TransactionsController,
     ],
     providers: [
         TransactionsService,
         ConnectionsService,
         CardsService,
+        PetService,
         CalculationService,
         ProductPriceService,
     ],

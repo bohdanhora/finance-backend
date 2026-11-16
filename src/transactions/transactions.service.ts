@@ -56,6 +56,7 @@ import {
     registerStreakVisit,
     resolveVisitDay,
 } from './helpers/streak';
+import { PetState, normalizePetState } from './helpers/pet';
 import {
     convertMainCurrencyAmounts,
     roundCurrency,
@@ -1556,8 +1557,7 @@ export class TransactionsService {
                     amount: item.amount,
                     title: item.title,
                     checked: false,
-                    ...(item.currency &&
-                    typeof item.currencyAmount === 'number'
+                    ...(item.currency && typeof item.currencyAmount === 'number'
                         ? {
                               currency: item.currency,
                               currencyAmount: item.currencyAmount,
@@ -1627,15 +1627,30 @@ export class TransactionsService {
             | undefined;
         const stored = storedStreak?.toObject?.() ?? storedStreak ?? null;
 
-        const { streak, changed, reached } = registerStreakVisit(
+        const storedPet = userData.pet as
+            | (Partial<PetState> & { toObject?: () => Partial<PetState> })
+            | undefined;
+        const pet = normalizePetState(
+            storedPet?.toObject?.() ?? storedPet ?? null,
+        );
+
+        const { streak, changed, reached, frozen } = registerStreakVisit(
             stored,
             resolveVisitDay(day),
+            pet.freezes,
         );
 
         if (changed) {
             await this.AllTransactionsInfoModel.updateOne(
                 { userId },
-                { $set: { streak } },
+                {
+                    $set: frozen
+                        ? {
+                              streak,
+                              pet: { ...pet, freezes: pet.freezes - frozen },
+                          }
+                        : { streak },
+                },
             );
         }
 
@@ -1643,6 +1658,7 @@ export class TransactionsService {
             message: changed ? 'Streak updated' : 'Streak already recorded',
             streak,
             reached,
+            frozen: frozen ?? 0,
         };
     }
 
