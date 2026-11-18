@@ -47,6 +47,11 @@ export class ExpectedIncomeItemDto {
     @IsNumber()
     @Min(0.01)
     currencyAmount?: number;
+
+    @IsOptional()
+    @IsString()
+    @MaxLength(80)
+    cardId?: string;
 }
 
 /** The stored plan plus whether, and how much, actually arrived. */

@@ -42,6 +42,7 @@ import {
     buildMonthRolloverUpdate,
     getMonthDifference,
     isMonthKey,
+    planFieldsOf,
     toMonthKey,
 } from './helpers/month-rollover';
 import { ChangeCurrencyDto } from './dtos/currency.dto';
@@ -785,6 +786,9 @@ export class TransactionsService {
                 category: item.category || undefined,
             };
             if (!paidEssential.category) delete paidEssential.category;
+            delete paidEssential.day;
+            delete paidEssential.fundedBy;
+            Object.assign(paidEssential, planFieldsOf(item));
 
             const updatedItems = currentItems.map((essential) =>
                 essential.id === item.id ? paidEssential : essential,
@@ -1557,12 +1561,14 @@ export class TransactionsService {
                     amount: item.amount,
                     title: item.title,
                     checked: false,
+                    ...(item.category ? { category: item.category } : {}),
                     ...(item.currency && typeof item.currencyAmount === 'number'
                         ? {
                               currency: item.currency,
                               currencyAmount: item.currencyAmount,
                           }
                         : {}),
+                    ...planFieldsOf(item),
                 }));
 
             updateData.cards = this.prepareCards(userData).map((card) => ({
@@ -1587,6 +1593,14 @@ export class TransactionsService {
                     day: income.day,
                     recurring: income.recurring,
                     received: false,
+                    ...(income.cardId ? { cardId: income.cardId } : {}),
+                    ...(income.currency &&
+                    typeof income.currencyAmount === 'number'
+                        ? {
+                              currency: income.currency,
+                              currencyAmount: income.currencyAmount,
+                          }
+                        : {}),
                 }),
             );
             updateData.expectedIncomes = expectedIncomes;

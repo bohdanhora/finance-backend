@@ -11,6 +11,7 @@ export type CardRecord = {
     balance: number;
     creditLimit?: number;
     cover?: string;
+    personal?: boolean;
     createdAt: string;
 };
 
@@ -49,6 +50,7 @@ export const createCard = (
         balance: roundCurrency(Math.max(-creditLimit, fields.balance ?? 0)),
         ...(creditLimit ? { creditLimit } : {}),
         ...(fields.cover ? { cover: fields.cover } : {}),
+        ...(fields.personal ? { personal: true } : {}),
         createdAt: new Date().toISOString(),
     };
 };

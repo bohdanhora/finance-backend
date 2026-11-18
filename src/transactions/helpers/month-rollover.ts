@@ -65,6 +65,17 @@ const foreignAmountOf = ({
         ? { currency, currencyAmount }
         : {};
 
+export const planFieldsOf = ({
+    day,
+    fundedBy,
+}: Pick<EssentialItemDto, 'day' | 'fundedBy'>): Pick<
+    EssentialItemDto,
+    'day' | 'fundedBy'
+> => ({
+    ...(typeof day === 'number' ? { day } : {}),
+    ...(fundedBy ? { fundedBy } : {}),
+});
+
 const copyEssentials = (
     items: EssentialItemDto[] = [],
     resetChecked = false,
@@ -77,6 +88,7 @@ const copyEssentials = (
             checked: resetChecked ? false : item.checked,
             ...(item.category ? { category: item.category } : {}),
             ...foreignAmountOf(item),
+            ...planFieldsOf(item),
         };
 
         if (!resetChecked && item.checked) {
@@ -126,6 +138,7 @@ const carryUnpaidEssentials = (
                 carriedFrom: item.carriedFrom ?? closingMonth,
                 ...(item.category ? { category: item.category } : {}),
                 ...foreignAmountOf(item),
+                ...planFieldsOf(item),
             };
         });
 };
@@ -143,6 +156,7 @@ const renewExpectedIncomes = (
             day: item.day,
             recurring: true,
             received: false,
+            ...(item.cardId ? { cardId: item.cardId } : {}),
             ...(item.currency && typeof item.currencyAmount === 'number'
                 ? {
                       currency: item.currency,

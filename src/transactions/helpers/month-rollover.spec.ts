@@ -119,6 +119,50 @@ describe('buildMonthRolloverUpdate', () => {
         ]);
     });
 
+    it('keeps the due day, the funding salary and the salary card', () => {
+        const plan = { day: 15, fundedBy: 'salary-15' };
+        const update = buildMonthRolloverUpdate(
+            {
+                lastProcessedMonth: '2026-08',
+                defaultEssentialsArray: [{ ...defaultEssentials[0], ...plan }],
+                essentialsArray: [
+                    {
+                        id: 'gym',
+                        amount: 1600,
+                        title: 'Gym',
+                        checked: false,
+                        day: 20,
+                    },
+                ],
+                nextMonthEssentialsArray: [
+                    { ...nextMonthEssentialsArray[0], ...plan },
+                ],
+                expectedIncomes: [
+                    { ...salary, received: true, cardId: 'card-main' },
+                ],
+            },
+            '2026-09',
+        );
+
+        expect(update?.essentialsArray).toEqual([
+            { ...nextMonthEssentialsArray[0], ...plan },
+            {
+                id: 'gym',
+                amount: 1600,
+                title: 'Gym',
+                checked: false,
+                carriedFrom: '2026-08',
+                day: 20,
+            },
+        ]);
+        expect(update?.nextMonthEssentialsArray).toEqual([
+            { ...defaultEssentials[0], checked: false, ...plan },
+        ]);
+        expect(update?.expectedIncomes).toEqual([
+            { ...salary, received: false, cardId: 'card-main' },
+        ]);
+    });
+
     it('keeps the foreign amount of planned, template and carried bills', () => {
         const foreign = {
             currency: SavingsCurrency.USD,

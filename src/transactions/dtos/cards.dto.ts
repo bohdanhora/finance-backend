@@ -1,6 +1,7 @@
 import {
     ArrayMinSize,
     IsArray,
+    IsBoolean,
     IsDateString,
     IsEnum,
     IsNumber,
@@ -41,6 +42,10 @@ export class CreateCardDto {
     creditLimit?: number;
 
     @IsOptional()
+    @IsBoolean()
+    personal?: boolean;
+
+    @IsOptional()
     @IsString()
     @MaxLength(CARD_COVER_MAX_LENGTH)
     @Matches(CARD_COVER_PATTERN, {
@@ -66,6 +71,10 @@ export class UpdateCardDto {
     @IsNumber()
     @Min(0)
     creditLimit?: number;
+
+    @IsOptional()
+    @IsBoolean()
+    personal?: boolean;
 
     @IsOptional()
     @ValidateIf((_, value) => value !== null)

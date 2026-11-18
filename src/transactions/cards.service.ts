@@ -88,7 +88,7 @@ export class CardsService {
     }
 
     async createCard(
-        { name, skin, balance, creditLimit, cover }: CreateCardDto,
+        { name, skin, balance, creditLimit, cover, personal }: CreateCardDto,
         req: AuthenticatedRequest,
     ) {
         const { userId, cards, transactions } = await this.load(req);
@@ -101,7 +101,14 @@ export class CardsService {
 
         ensureWithinCreditLimit(balance ?? 0, creditLimit ?? 0);
 
-        const card = createCard({ name, skin, balance, creditLimit, cover });
+        const card = createCard({
+            name,
+            skin,
+            balance,
+            creditLimit,
+            cover,
+            personal,
+        });
 
         return {
             message: 'Card added',
@@ -111,7 +118,7 @@ export class CardsService {
     }
 
     async updateCard(
-        { id, name, skin, creditLimit, cover }: UpdateCardDto,
+        { id, name, skin, creditLimit, cover, personal }: UpdateCardDto,
         req: AuthenticatedRequest,
     ) {
         const { userId, cards, transactions } = await this.load(req);
@@ -124,8 +131,14 @@ export class CardsService {
         const updatedCards = cards.map((card) => {
             if (card.id !== id) return card;
 
-            const { cover: previousCover, ...rest } = card;
+            const {
+                cover: previousCover,
+                personal: wasPersonal,
+                ...rest
+            } = card;
             const nextCover = cover === undefined ? previousCover : cover;
+            const nextPersonal =
+                personal === undefined ? wasPersonal : personal;
 
             return {
                 ...rest,
@@ -135,6 +148,7 @@ export class CardsService {
                     ? { creditLimit: roundCurrency(creditLimit) }
                     : {}),
                 ...(nextCover ? { cover: nextCover } : {}),
+                ...(nextPersonal ? { personal: true } : {}),
             };
         });
 

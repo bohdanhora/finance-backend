@@ -11,6 +11,8 @@ import {
     MaxLength,
     Min,
     ValidateIf,
+    IsInt,
+    Max,
 } from 'class-validator';
 import { SavingsCurrency } from './savings.dto';
 
@@ -52,6 +54,17 @@ export class EssentialItemDto {
     @IsOptional()
     @IsString()
     paymentTransactionId?: string;
+
+    @IsOptional()
+    @IsInt()
+    @Min(1)
+    @Max(31)
+    day?: number;
+
+    @IsOptional()
+    @IsString()
+    @MaxLength(80)
+    fundedBy?: string;
 
     /** Month key the bill was left unpaid in before it moved to this month. */
     @IsOptional()
