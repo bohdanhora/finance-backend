@@ -1,9 +1,11 @@
 import {
     IsBoolean,
     IsEnum,
+    IsInt,
     IsNumber,
     IsOptional,
     IsString,
+    Max,
     MaxLength,
     Min,
     ValidateIf,
@@ -39,6 +41,17 @@ export class NewEssentialItemDto {
     @IsNumber()
     @Min(0.01)
     currencyAmount?: number;
+
+    @IsOptional()
+    @IsInt()
+    @Min(1)
+    @Max(31)
+    day?: number;
+
+    @IsOptional()
+    @IsString()
+    @MaxLength(80)
+    fundedBy?: string;
 }
 
 export class NewEssentialDto {
