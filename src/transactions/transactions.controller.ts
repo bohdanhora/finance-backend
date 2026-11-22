@@ -29,6 +29,7 @@ import { CurrentMonthDto } from './dtos/current-month.dto';
 import { UpdateEssentialDto } from './dtos/update-essential.dto';
 import {
     DeleteSavingsGoalDto,
+    SavingsGoalOrderDto,
     SavingsGoalPayloadDto,
     SavingsOperationPayloadDto,
     SavingsPriceQueryDto,
@@ -203,6 +204,14 @@ export class TransactionsController {
         @Req() req: AuthenticatedRequest,
     ) {
         return this.transactionsService.updateSavingsGoal(data, req);
+    }
+
+    @Put('savings/goals/order')
+    async reorderSavingsGoals(
+        @Body() data: SavingsGoalOrderDto,
+        @Req() req: AuthenticatedRequest,
+    ) {
+        return this.transactionsService.reorderSavingsGoals(data, req);
     }
 
     @Delete('savings/goals/:id')

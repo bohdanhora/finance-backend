@@ -28,6 +28,12 @@ export class SavingsGoal {
     @Prop({ trim: true })
     url?: string;
 
+    @Prop({ type: [String], default: undefined })
+    links?: string[];
+
+    @Prop({ trim: true })
+    note?: string;
+
     @Prop({ required: true })
     createdAt: string;
 }

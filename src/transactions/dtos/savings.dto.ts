@@ -1,5 +1,6 @@
 import { Type } from 'class-transformer';
 import {
+    ArrayMaxSize,
     ArrayMinSize,
     Equals,
     IsBoolean,
@@ -33,6 +34,8 @@ export enum SavingsOperationType {
     TRANSFER = 'transfer',
 }
 
+export const GOAL_LINKS_LIMIT = 5;
+
 export class SavingsGoalDto {
     @IsString()
     id: string;
@@ -64,8 +67,30 @@ export class SavingsGoalDto {
     })
     url?: string;
 
+    @IsOptional()
+    @IsArray()
+    @ArrayMaxSize(GOAL_LINKS_LIMIT)
+    @IsString({ each: true })
+    @MaxLength(500, { each: true })
+    @Matches(/^https?:\/\/\S+$/, {
+        each: true,
+        message: 'each link must be an http or https link',
+    })
+    links?: string[];
+
+    @IsOptional()
+    @IsString()
+    @MaxLength(1000)
+    note?: string;
+
     @IsDateString()
     createdAt: string;
+}
+
+export class SavingsGoalOrderDto {
+    @IsArray()
+    @IsString({ each: true })
+    ids: string[];
 }
 
 export class SavingsGoalPayloadDto {

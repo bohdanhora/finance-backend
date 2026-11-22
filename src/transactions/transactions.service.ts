@@ -32,6 +32,7 @@ import {
     DeleteSavingsGoalDto,
     SavingsCurrency,
     SavingsGoalDto,
+    SavingsGoalOrderDto,
     SavingsGoalPayloadDto,
     SavingsOperationDto,
     SavingsOperationPayloadDto,
@@ -1137,7 +1138,7 @@ export class TransactionsService {
             throw new BadRequestException('Savings goal already exists');
         }
 
-        const updatedGoals = [item, ...goals];
+        const updatedGoals = [...goals, item];
         await this.AllTransactionsInfoModel.updateOne(
             { userId },
             { $set: { savingsGoals: updatedGoals } },
@@ -1145,6 +1146,39 @@ export class TransactionsService {
 
         return {
             message: 'Savings goal added',
+            updatedGoals,
+            updatedOperations: userData.savingsOperations || [],
+        };
+    }
+
+    async reorderSavingsGoals(
+        { ids }: SavingsGoalOrderDto,
+        req: AuthenticatedRequest,
+    ) {
+        const userId = this.getUserIdOrThrow(req);
+        const userData = await this.getUserDataOrThrow(userId);
+        const goals = (userData.savingsGoals || []) as SavingsGoalDto[];
+        const unique = new Set(ids);
+
+        if (
+            unique.size !== goals.length ||
+            ids.length !== goals.length ||
+            goals.some((goal) => !unique.has(goal.id))
+        ) {
+            throw new BadRequestException('The goal order does not match');
+        }
+
+        const updatedGoals = ids.map(
+            (id) => goals.find((goal) => goal.id === id)!,
+        );
+
+        await this.AllTransactionsInfoModel.updateOne(
+            { userId },
+            { $set: { savingsGoals: updatedGoals } },
+        );
+
+        return {
+            message: 'Savings goals reordered',
             updatedGoals,
             updatedOperations: userData.savingsOperations || [],
         };
