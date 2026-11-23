@@ -17,7 +17,13 @@ export class User {
 
     @Prop()
     avatar?: string;
+
+    @Prop()
+    emailVerified?: boolean;
 }
+
+export const isEmailVerified = (user: Pick<User, 'emailVerified'>) =>
+    user.emailVerified !== false;
 
 export type UserDocument = HydratedDocument<User>;
 

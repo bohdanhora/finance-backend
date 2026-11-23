@@ -1,47 +1,72 @@
-import { Injectable } from '@nestjs/common';
+import { HttpException, HttpStatus, Injectable } from '@nestjs/common';
+import { InjectModel } from '@nestjs/mongoose';
+import { randomInt } from 'crypto';
+import { Model } from 'mongoose';
+import { EmailCode } from 'src/auth/schemas/email-code.schema';
 
-interface CodeEntry {
-    code: string;
-    expiresAt: Date;
-}
+const CODE_TTL_MS = 10 * 60 * 1000;
+const RESEND_AFTER_MS = 60 * 1000;
+const MAX_ATTEMPTS = 5;
 
 @Injectable()
 export class VerificationService {
-    private codes = new Map<string, CodeEntry>();
+    constructor(
+        @InjectModel(EmailCode.name) private EmailCodeModel: Model<EmailCode>,
+    ) {}
 
-    private readonly CODE_TTL_MS = 5 * 60 * 1000;
+    async createCode(email: string): Promise<string> {
+        const now = Date.now();
+        const existing = await this.EmailCodeModel.findOne({ email });
 
-    generateCode(): string {
-        return Math.floor(100000 + Math.random() * 900000).toString();
-    }
+        if (existing && now - existing.sentAt.getTime() < RESEND_AFTER_MS) {
+            throw new HttpException(
+                {
+                    message:
+                        'Please wait a minute before requesting a new code',
+                    code: 'CODE_RECENTLY_SENT',
+                },
+                HttpStatus.TOO_MANY_REQUESTS,
+            );
+        }
 
-    createCode(email: string) {
-        const code = this.generateCode();
-        const expiresAt = new Date(Date.now() + this.CODE_TTL_MS);
-        this.codes.set(email, { code, expiresAt });
+        const code = randomInt(100000, 1000000).toString();
+        await this.EmailCodeModel.updateOne(
+            { email },
+            {
+                $set: {
+                    code,
+                    sentAt: new Date(now),
+                    expiresAt: new Date(now + CODE_TTL_MS),
+                    attempts: 0,
+                },
+            },
+            { upsert: true },
+        );
+
         return code;
     }
 
-    verifyCode(email: string, inputCode: string): boolean {
-        const entry = this.codes.get(email);
+    async verifyCode(email: string, inputCode: string): Promise<boolean> {
+        const entry = await this.EmailCodeModel.findOne({ email });
         if (!entry) return false;
 
-        const now = new Date();
-        if (now > entry.expiresAt) {
-            this.codes.delete(email);
+        if (
+            entry.expiresAt.getTime() < Date.now() ||
+            entry.attempts >= MAX_ATTEMPTS
+        ) {
+            await this.EmailCodeModel.deleteOne({ email });
             return false;
         }
 
-        const isValid = entry.code === inputCode;
-
-        if (isValid) {
-            this.codes.delete(email);
+        if (entry.code !== inputCode.trim()) {
+            await this.EmailCodeModel.updateOne(
+                { email },
+                { $inc: { attempts: 1 } },
+            );
+            return false;
         }
 
-        return isValid;
-    }
-
-    deleteCode(email: string) {
-        this.codes.delete(email);
+        await this.EmailCodeModel.deleteOne({ email });
+        return true;
     }
 }

@@ -12,6 +12,7 @@ export enum SessionEndReason {
     REVOKED = 'revoked',
     PASSWORD_CHANGED = 'password-changed',
     PASSWORD_RESET = 'password-reset',
+    EMAIL_CLAIMED = 'email-claimed',
 }
 
 @Schema({ versionKey: false })

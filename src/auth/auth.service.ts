@@ -1,13 +1,15 @@
 import {
     BadRequestException,
+    ConflictException,
     Injectable,
+    Logger,
     InternalServerErrorException,
     NotFoundException,
     UnauthorizedException,
 } from '@nestjs/common';
-import { RegistrationDto } from './dtos/registration.dto';
+import { ClaimEmailDto, RegistrationDto } from './dtos/registration.dto';
 import { InjectModel } from '@nestjs/mongoose';
-import { User, UserDocument } from './schemas/user.schema';
+import { User, UserDocument, isEmailVerified } from './schemas/user.schema';
 import { Model, Types } from 'mongoose';
 import * as bcrypt from 'bcrypt';
 import { LoginDto } from './dtos/login.dto';
@@ -28,8 +30,18 @@ const CASE_INSENSITIVE = { locale: 'en', strength: 2 } as const;
 export const normaliseEmail = (email: string): string =>
     email.trim().toLowerCase();
 
+const emailTaken = (verified: boolean) =>
+    new ConflictException({
+        message: verified
+            ? 'An account with this email already exists'
+            : 'This email belongs to an account that was never confirmed',
+        code: verified ? 'EMAIL_TAKEN' : 'EMAIL_UNVERIFIED',
+    });
+
 @Injectable()
 export class AuthService {
+    private readonly logger = new Logger(AuthService.name);
+
     constructor(
         @InjectModel(User.name) private UserModel: Model<User>,
         @InjectModel(AllTransactionsInfo.name)
@@ -49,44 +61,15 @@ export class AuthService {
         }).collation(CASE_INSENSITIVE);
     }
 
-    async registration(registrationData: RegistrationDto) {
-        const { password, name, verificationCode } = registrationData;
-        const email = normaliseEmail(registrationData.email);
-
-        const isValid = this.verificationService.verifyCode(
-            email,
-            verificationCode,
-        );
-
-        if (!isValid) {
-            throw new BadRequestException(
-                'Invalid or expired verification code',
-            );
-        }
-
-        const emailInUse = await this.findByEmail(email);
-
-        if (emailInUse) {
-            throw new BadRequestException('Email already in use');
-        }
-
-        const hashedPassword = await bcrypt.hash(password, 10);
-
-        const newUser = await this.UserModel.create({
-            name,
-            email,
-            password: hashedPassword,
-        });
-
+    private async createFinances(userId: Types.ObjectId) {
         await this.AllTransactionsInfoModel.create({
-            userId: newUser._id,
+            userId,
             totalAmount: 0,
             totalIncome: 0,
             totalSpend: 0,
             nextMonthTotalAmount: 0,
             savePercent: 0,
             lastProcessedMonth: toMonthKey(),
-
             defaultEssentialsArray: [],
             essentialsArray: [],
             nextMonthEssentialsArray: [],
@@ -94,10 +77,148 @@ export class AuthService {
             savingsGoals: [],
             savingsOperations: [],
         });
+    }
 
+    private async sendVerificationCode(email: string) {
+        const code = await this.verificationService.createCode(email);
+        await this.mailService.sendEmailVerificationCode(email, code);
+    }
+
+    async registration(
+        registrationData: RegistrationDto,
+        context: SessionContext = {},
+    ) {
+        const { password, name, verificationCode } = registrationData;
+        const email = normaliseEmail(registrationData.email);
+
+        const existing = await this.findByEmail(email);
+        if (existing) {
+            throw emailTaken(isEmailVerified(existing));
+        }
+
+        let emailVerified = false;
+        if (verificationCode) {
+            emailVerified = await this.verificationService.verifyCode(
+                email,
+                verificationCode,
+            );
+            if (!emailVerified) {
+                throw new BadRequestException(
+                    'Invalid or expired verification code',
+                );
+            }
+        }
+
+        const newUser = await this.UserModel.create({
+            name,
+            email,
+            password: await bcrypt.hash(password, 10),
+            emailVerified,
+        });
+        await this.createFinances(newUser._id);
+
+        if (!emailVerified) {
+            this.sendVerificationCode(email).catch((error: unknown) =>
+                this.logger.warn(
+                    `Verification code was not sent to ${email}: ${String(error)}`,
+                ),
+            );
+        }
+
+        const tokens = await this.generateUserTokens(
+            newUser._id.toString(),
+            SessionMethod.PASSWORD,
+            context,
+        );
+
+        return { message: 'Registration successful', ...tokens };
+    }
+
+    async claimEmail(data: ClaimEmailDto, context: SessionContext = {}) {
+        const email = normaliseEmail(data.email);
+        const existing = await this.findByEmail(email);
+
+        if (existing && isEmailVerified(existing)) {
+            throw emailTaken(true);
+        }
+
+        const valid = await this.verificationService.verifyCode(
+            email,
+            data.verificationCode,
+        );
+        if (!valid) {
+            throw new BadRequestException(
+                'Invalid or expired verification code',
+            );
+        }
+
+        if (existing) {
+            const oldId = existing._id.toString();
+            await this.sessionsService.endAll(
+                oldId,
+                SessionEndReason.EMAIL_CLAIMED,
+            );
+            await Promise.all([
+                this.ResetTokenModel.deleteMany({ userId: existing._id }),
+                this.AllTransactionsInfoModel.deleteMany({
+                    userId: { $in: [oldId, existing._id] },
+                }),
+                this.UserModel.deleteOne({ _id: existing._id }),
+            ]);
+        }
+
+        const newUser = await this.UserModel.create({
+            name: data.name,
+            email,
+            password: await bcrypt.hash(data.password, 10),
+            emailVerified: true,
+        });
+        await this.createFinances(newUser._id);
+
+        const tokens = await this.generateUserTokens(
+            newUser._id.toString(),
+            SessionMethod.PASSWORD,
+            context,
+        );
+
+        return { message: 'Registration successful', ...tokens };
+    }
+
+    async requestOwnVerification(userId: string) {
+        const user = await this.UserModel.findById(userId);
+        if (!user) throw new NotFoundException('User not found');
+        if (isEmailVerified(user)) {
+            return { message: 'Email already confirmed', emailVerified: true };
+        }
+
+        await this.sendVerificationCode(user.email);
         return {
-            message: 'Registration successful, please login',
+            message: 'Verification code sent to email',
+            emailVerified: false,
         };
+    }
+
+    async verifyOwnEmail(userId: string, code: string) {
+        const user = await this.UserModel.findById(userId);
+        if (!user) throw new NotFoundException('User not found');
+        if (isEmailVerified(user)) {
+            return { message: 'Email already confirmed', emailVerified: true };
+        }
+
+        const valid = await this.verificationService.verifyCode(
+            user.email,
+            code,
+        );
+        if (!valid) {
+            throw new BadRequestException({
+                message: 'Invalid or expired verification code',
+                code: 'INVALID_CODE',
+            });
+        }
+
+        user.emailVerified = true;
+        await user.save();
+        return { message: 'Email confirmed', emailVerified: true };
     }
 
     async login(loginData: LoginDto, context: SessionContext = {}) {
@@ -195,6 +316,7 @@ export class AuthService {
             email: user.email,
             registeredVia: user.registeredVia,
             hasPassword: Boolean(user.password),
+            emailVerified: isEmailVerified(user),
         };
     }
 
@@ -243,6 +365,13 @@ export class AuthService {
 
     async forgotPassword({ email }: { email: string }) {
         const user = await this.findByEmail(email);
+        if (user && !isEmailVerified(user)) {
+            throw new BadRequestException({
+                message:
+                    'This email was never confirmed, so the password cannot be reset by email',
+                code: 'EMAIL_UNVERIFIED',
+            });
+        }
         if (user) {
             const expiryDate = new Date();
             expiryDate.setDate(expiryDate.getDate() + 1);
@@ -323,6 +452,17 @@ export class AuthService {
 
         let user = await this.findByEmail(email);
 
+        if (user && !isEmailVerified(user)) {
+            const userId = user._id.toString();
+            user.emailVerified = true;
+            user.password = undefined;
+            await user.save();
+            await this.sessionsService.endAll(
+                userId,
+                SessionEndReason.EMAIL_CLAIMED,
+            );
+        }
+
         if (!user) {
             user = await this.UserModel.create({
                 name,
@@ -330,6 +470,7 @@ export class AuthService {
                 avatar: picture,
                 registeredVia: 'google',
                 password: null,
+                emailVerified: true,
             });
 
             await this.AllTransactionsInfoModel.create({
@@ -352,9 +493,7 @@ export class AuthService {
         return user;
     }
     async requestEmailCode(rawEmail: string) {
-        const email = normaliseEmail(rawEmail);
-        const code = this.verificationService.createCode(email);
-        await this.mailService.sendEmailVerificationCode(email, code);
+        await this.sendVerificationCode(normaliseEmail(rawEmail));
         return { message: 'Verification code sent to email' };
     }
 }

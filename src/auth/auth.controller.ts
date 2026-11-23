@@ -9,7 +9,11 @@ import {
     UseGuards,
 } from '@nestjs/common';
 import { AuthService } from './auth.service';
-import { RegistrationDto } from './dtos/registration.dto';
+import {
+    ClaimEmailDto,
+    RegistrationDto,
+    VerifyEmailDto,
+} from './dtos/registration.dto';
 import { LoginDto } from './dtos/login.dto';
 import { RefreshTokenDto } from './dtos/refresh-token.dto';
 import { ResetPasswordDto } from './dtos/reset-password.dto';
@@ -42,8 +46,34 @@ export class AuthController {
     ) {}
 
     @Post('registration')
-    async registration(@Body() registationData: RegistrationDto) {
-        return this.authService.registration(registationData);
+    async registration(
+        @Body() registationData: RegistrationDto,
+        @Req() req: ExpressRequest,
+    ) {
+        return this.authService.registration(
+            registationData,
+            requestContext(req),
+        );
+    }
+
+    @Post('claim-email')
+    async claimEmail(@Body() data: ClaimEmailDto, @Req() req: ExpressRequest) {
+        return this.authService.claimEmail(data, requestContext(req));
+    }
+
+    @UseGuards(AuthGuard)
+    @Post('verify-email/request')
+    async requestOwnVerification(@Req() req: RequestWithUserId) {
+        return this.authService.requestOwnVerification(req.userId);
+    }
+
+    @UseGuards(AuthGuard)
+    @Post('verify-email')
+    async verifyOwnEmail(
+        @Body() { code }: VerifyEmailDto,
+        @Req() req: RequestWithUserId,
+    ) {
+        return this.authService.verifyOwnEmail(req.userId, code);
     }
 
     @Post('login')

@@ -1,6 +1,31 @@
-import { IsEmail, IsString, Matches, MinLength } from 'class-validator';
+import {
+    IsEmail,
+    IsOptional,
+    IsString,
+    Matches,
+    MinLength,
+} from 'class-validator';
 
 export class RegistrationDto {
+    @IsString()
+    name: string;
+
+    @IsEmail()
+    email: string;
+
+    @IsOptional()
+    @IsString()
+    verificationCode?: string;
+
+    @IsString()
+    @MinLength(6)
+    @Matches(/^(?=.*[0-9])/, {
+        message: 'Password must contain at least one number',
+    })
+    password: string;
+}
+
+export class ClaimEmailDto {
     @IsString()
     name: string;
 
@@ -16,4 +41,9 @@ export class RegistrationDto {
         message: 'Password must contain at least one number',
     })
     password: string;
+}
+
+export class VerifyEmailDto {
+    @IsString()
+    code: string;
 }

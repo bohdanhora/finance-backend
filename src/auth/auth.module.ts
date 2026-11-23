@@ -18,6 +18,7 @@ import { PassportModule } from '@nestjs/passport';
 import { GoogleStrategy } from './strategies/google.strategy';
 import { VerificationService } from 'src/services/verification.service';
 import { TestAccountSeedService } from './test-account.seed';
+import { EmailCode, EmailCodeSchema } from './schemas/email-code.schema';
 
 @Module({
     imports: [
@@ -38,6 +39,10 @@ import { TestAccountSeedService } from './test-account.seed';
             {
                 name: AllTransactionsInfo.name,
                 schema: AllTransactionsInfoSchema,
+            },
+            {
+                name: EmailCode.name,
+                schema: EmailCodeSchema,
             },
         ]),
     ],
