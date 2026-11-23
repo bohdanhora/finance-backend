@@ -32,6 +32,9 @@ export class SavingsGoal {
     links?: string[];
 
     @Prop({ trim: true })
+    image?: string;
+
+    @Prop({ trim: true })
     note?: string;
 
     @Prop({ required: true })

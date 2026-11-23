@@ -80,6 +80,14 @@ export class SavingsGoalDto {
 
     @IsOptional()
     @IsString()
+    @MaxLength(2000)
+    @Matches(/^https:\/\/\S+$/, {
+        message: 'image must be an https link',
+    })
+    image?: string;
+
+    @IsOptional()
+    @IsString()
     @MaxLength(1000)
     note?: string;
 

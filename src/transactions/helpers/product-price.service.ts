@@ -2,13 +2,18 @@ import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { lookup } from 'node:dns/promises';
 import { isIP } from 'node:net';
 
-import { parsePageTitle, parseProductPrice } from './product-price';
+import {
+    parsePageTitle,
+    parseProductImage,
+    parseProductPrice,
+} from './product-price';
 
 export type ProductPriceResult = {
     url: string;
     price: number | null;
     currency?: string;
     title?: string;
+    image?: string;
     checkedAt: string;
 };
 
@@ -78,6 +83,7 @@ export class ProductPriceService {
             price: parsed?.price ?? null,
             currency: parsed?.currency,
             title: html ? parsePageTitle(html) : undefined,
+            image: html ? parseProductImage(html, url.href) : undefined,
             checkedAt: new Date().toISOString(),
         };
 

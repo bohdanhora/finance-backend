@@ -1,6 +1,7 @@
 import {
     parseAmount,
     parsePageTitle,
+    parseProductImage,
     parseProductPrice,
 } from './product-price';
 
@@ -126,5 +127,54 @@ describe('parseProductPrice visible markup fallback', () => {
         const html = `<div class="rating">4.8 of 5</div><span>1 299 грн saved</span>`;
 
         expect(parseProductPrice(html)).toBeNull();
+    });
+});
+
+describe('parseProductImage', () => {
+    const page = 'https://shop.example/item/1';
+
+    it('prefers the OpenGraph image', () => {
+        const html =
+            '<meta property="og:image" content="https://cdn.shop.example/a.jpg"><meta name="twitter:image" content="https://cdn.shop.example/b.jpg">';
+        expect(parseProductImage(html, page)).toBe(
+            'https://cdn.shop.example/a.jpg',
+        );
+    });
+
+    it('resolves relative links and upgrades http', () => {
+        expect(
+            parseProductImage(
+                '<meta property="og:image" content="/img/a.png">',
+                page,
+            ),
+        ).toBe('https://shop.example/img/a.png');
+        expect(
+            parseProductImage(
+                '<meta property="og:image" content="http://cdn.example/a.png">',
+                page,
+            ),
+        ).toBe('https://cdn.example/a.png');
+    });
+
+    it('falls back to the JSON-LD product image', () => {
+        const html = `<script type="application/ld+json">${JSON.stringify({
+            '@type': 'Product',
+            image: [{ '@type': 'ImageObject', url: '//cdn.example/p.webp' }],
+        })}</script>`;
+        expect(parseProductImage(html, page)).toBe(
+            'https://cdn.example/p.webp',
+        );
+    });
+
+    it('returns nothing without an image', () => {
+        expect(parseProductImage('<title>Item</title>', page)).toBeUndefined();
+    });
+
+    it('reads the main product photo when there is no meta image', () => {
+        const html =
+            '<img id="landingImage" src="https://m.media.example/s.jpg" data-old-hires="https://m.media.example/l.jpg">';
+        expect(parseProductImage(html, page)).toBe(
+            'https://m.media.example/l.jpg',
+        );
     });
 });

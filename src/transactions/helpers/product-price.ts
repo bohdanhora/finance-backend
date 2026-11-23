@@ -279,3 +279,86 @@ export const parsePageTitle = (html: string): string | undefined => {
 
     return trimmed ? trimmed.slice(0, 120) : undefined;
 };
+
+const IMAGE_META_KEYS = [
+    'og:image:secure_url',
+    'og:image',
+    'og:image:url',
+    'twitter:image',
+    'twitter:image:src',
+];
+
+const pickJsonLdImage = (value: unknown, depth = 0): string | undefined => {
+    if (depth > 4 || !value) return undefined;
+    if (typeof value === 'string') return value;
+    if (Array.isArray(value)) {
+        for (const item of value) {
+            const found = pickJsonLdImage(item, depth + 1);
+            if (found) return found;
+        }
+        return undefined;
+    }
+    if (typeof value === 'object') {
+        const record = value as Record<string, unknown>;
+        return pickJsonLdImage(
+            record.url ?? record.contentUrl ?? record['@id'],
+            depth + 1,
+        );
+    }
+    return undefined;
+};
+
+const toImageUrl = (raw: string | undefined, pageUrl: string) => {
+    const value = raw?.trim();
+    if (!value || value.startsWith('data:')) return undefined;
+
+    try {
+        const url = new URL(value, pageUrl);
+        if (url.protocol === 'http:') url.protocol = 'https:';
+        return url.protocol === 'https:' ? url.href : undefined;
+    } catch {
+        return undefined;
+    }
+};
+
+export const parseProductImage = (
+    html: string,
+    pageUrl: string,
+): string | undefined => {
+    const tags = readMetaTags(html);
+
+    for (const key of IMAGE_META_KEYS) {
+        const tag = tags.find(
+            (item) => (item.property || item.name || '').toLowerCase() === key,
+        );
+        const url = toImageUrl(tag?.content, pageUrl);
+        if (url) return url;
+    }
+
+    const products = collectJsonLdNodes(html)
+        .flatMap((node) => flattenJsonLd(node))
+        .filter((node) => 'image' in node);
+
+    for (const node of products) {
+        const url = toImageUrl(pickJsonLdImage(node.image), pageUrl);
+        if (url) return url;
+    }
+
+    const hero =
+        /<img\b[^>]*id\s*=\s*["'](?:landingImage|imgBlkFront|main-image)["'][^>]*>/i.exec(
+            html,
+        );
+    if (hero) {
+        const attributes = readAttributes(hero[0]);
+        const url = toImageUrl(
+            attributes['data-old-hires'] || attributes.src,
+            pageUrl,
+        );
+        if (url) return url;
+    }
+
+    const linked = /<link\b[^>]*rel\s*=\s*["']image_src["'][^>]*>/i.exec(html);
+    return linked
+        ? toImageUrl(readAttributes(linked[0]).href, pageUrl)
+        : undefined;
+};
