@@ -147,7 +147,7 @@ export class ProductPriceService {
                 signal: controller.signal,
             });
 
-            if (!response.ok) return null;
+            if (!response.ok || response.status === 202) return null;
 
             const type = response.headers.get('content-type') ?? '';
             if (type && !type.includes('html') && !type.includes('xml'))

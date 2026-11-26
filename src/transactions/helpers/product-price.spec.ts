@@ -178,3 +178,77 @@ describe('parseProductImage', () => {
         );
     });
 });
+
+describe('product details from real shop layouts', () => {
+    const page = 'https://shop.example/item';
+    const ld = (data: unknown) =>
+        `<script type="application/ld+json">${JSON.stringify(data)}</script>`;
+
+    it('takes the product name over a noisy OpenGraph title', () => {
+        const html = `<meta property="og:title" content="Buds 3 ᐈ Купити в Цитрус">${ld(
+            { '@type': 'Product', name: 'Навушники Buds3 FE' },
+        )}`;
+        expect(parsePageTitle(html)).toBe('Навушники Buds3 FE');
+    });
+
+    it('skips an empty OpenGraph title', () => {
+        const html =
+            '<meta property="og:title" content=""><title>Мультипіч Air Fryer купити в АЛЛО</title>';
+        expect(parsePageTitle(html)).toBe('Мультипіч Air Fryer');
+    });
+
+    it('trusts the page heading when the document title starts with it', () => {
+        const html = `<title>Парасолька Bergamo Sky, чорна купити</title><h1 class="x">Парасолька Bergamo Sky, чорна</h1>${ld(
+            { '@type': 'Product', name: 'Bergamo Sky' },
+        )}`;
+        expect(parsePageTitle(html)).toBe('Парасолька Bergamo Sky, чорна');
+    });
+
+    it('cuts store tails from titles', () => {
+        expect(
+            parsePageTitle(
+                '<title>Оливкова олія Monini 1 л, ціна 399 ₴: купити на Prom.ua</title>',
+            ),
+        ).toBe('Оливкова олія Monini 1 л');
+        expect(
+            parsePageTitle('<title>Amazon.com: Apple AirPods Pro</title>'),
+        ).toBe('Apple AirPods Pro');
+    });
+
+    it('reads the Amazon product title element', () => {
+        const html =
+            '<title>Amazon.com</title><span id="productTitle" class="a">  AirPods Pro  </span>';
+        expect(parsePageTitle(html)).toBe('AirPods Pro');
+    });
+
+    it('prefers the product photo over a thumbnail in the meta tags', () => {
+        const html = `<meta property="og:image" content="https://cdn.example/size_180/a.webp">${ld(
+            {
+                '@type': 'Product',
+                image: [
+                    'https://cdn.example/a.webp',
+                    'https://cdn.example/b.webp',
+                ],
+            },
+        )}`;
+        expect(parseProductImage(html, page)).toBe(
+            'https://cdn.example/a.webp',
+        );
+    });
+
+    it('takes the price of the product, not of a listed recommendation', () => {
+        const html = `${ld({
+            '@type': 'ItemList',
+            itemListElement: [
+                { '@type': 'Offer', price: '99', priceCurrency: 'UAH' },
+            ],
+        })}${ld({
+            '@type': 'Product',
+            offers: { '@type': 'Offer', price: '4999', priceCurrency: 'UAH' },
+        })}`;
+        expect(parseProductPrice(html)).toEqual({
+            price: 4999,
+            currency: 'UAH',
+        });
+    });
+});

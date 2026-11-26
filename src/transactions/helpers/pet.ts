@@ -45,6 +45,8 @@ export const PET_ITEMS: PetItem[] = [
     item('wizard', 'head', 2200),
     item('halo', 'head', 5000),
     item('crown', 'head', 8000),
+    item('straw', 'head', 350),
+    item('sleepcap', 'head', 420),
     item('shades', 'eyes', 90),
     item('round', 'eyes', 110),
     item('hearts', 'eyes', 130),
@@ -53,6 +55,7 @@ export const PET_ITEMS: PetItem[] = [
     item('pixel', 'eyes', 1000),
     item('vr', 'eyes', 1600),
     item('laser', 'eyes', 4500),
+    item('aviator', 'eyes', 380),
     item('bandana', 'neck', 60),
     item('bowtie', 'neck', 90),
     item('scarf', 'neck', 120),
@@ -62,6 +65,9 @@ export const PET_ITEMS: PetItem[] = [
     item('medal', 'neck', 900),
     item('pearls', 'neck', 1500),
     item('diamond', 'neck', 6000),
+    item('moonPendant', 'neck', 450),
+    item('ribbon', 'neck', 180),
+    item('sailor', 'neck', 320),
     item('room', 'background', 0),
     item('park', 'background', 150),
     item('beach', 'background', 200),
@@ -74,6 +80,10 @@ export const PET_ITEMS: PetItem[] = [
     item('underwater', 'background', 2400),
     item('neon', 'background', 3000),
     item('vault', 'background', 7500),
+    item('greenhouse', 'background', 350),
+    item('library', 'background', 400),
+    item('cafe', 'background', 450),
+    item('camping', 'background', 550),
 ];
 
 export const PET_SLOTS: PetSlot[] = ['head', 'eyes', 'neck', 'background'];

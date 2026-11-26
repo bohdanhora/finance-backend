@@ -173,11 +173,26 @@ const flattenJsonLd = (node: unknown, depth = 0): Record<string, unknown>[] => {
     return [record, ...nested];
 };
 
-const fromJsonLd = (html: string): ParsedProductPrice | null => {
-    const nodes = collectJsonLdNodes(html).flatMap((node) =>
-        flattenJsonLd(node),
+const isProductNode = (node: Record<string, unknown>) => {
+    const type = node['@type'];
+    const types = Array.isArray(type) ? type : [type];
+    return types.some(
+        (item) =>
+            typeof item === 'string' &&
+            /^(Product|ProductGroup|IndividualProduct|Book|Vehicle)$/i.test(
+                item,
+            ),
     );
+};
 
+const productNodes = (html: string): Record<string, unknown>[] =>
+    collectJsonLdNodes(html)
+        .flatMap((node) => flattenJsonLd(node))
+        .filter(isProductNode);
+
+const priceFromNodes = (
+    nodes: Record<string, unknown>[],
+): ParsedProductPrice | null => {
     for (const node of nodes) {
         const price =
             parseAmount(node.price) ??
@@ -190,6 +205,19 @@ const fromJsonLd = (html: string): ParsedProductPrice | null => {
     }
 
     return null;
+};
+
+const fromJsonLd = (html: string): ParsedProductPrice | null => {
+    const products = productNodes(html).flatMap((node) =>
+        flattenJsonLd(node.offers),
+    );
+
+    return (
+        priceFromNodes(products) ??
+        priceFromNodes(
+            collectJsonLdNodes(html).flatMap((node) => flattenJsonLd(node)),
+        )
+    );
 };
 
 const fromMicrodata = (html: string): ParsedProductPrice | null => {
@@ -262,22 +290,94 @@ export const parseProductPrice = (html: string): ParsedProductPrice | null =>
     fromMicrodata(html) ??
     fromPriceMarkup(html);
 
+const TITLE_BREAKS = /\s*(?:ᐈ|ᐉ|❱|➤|►|⚡|✔|✅|⭐|\|)\s*/;
+const TITLE_TAILS =
+    /(?:\s+[\p{Pd}:]\s+|,\s*|\s+)(?:купити|купить|замовити|заказать|buy|ціна|цена|price|відгуки|отзывы|reviews|характеристики).*$/iu;
+
+export const cleanTitle = (raw: string | undefined): string | undefined => {
+    if (!raw) return undefined;
+
+    const text = decodeEntities(raw.replace(/<[^>]*>/g, ' '))
+        .replace(/\s+/g, ' ')
+        .replace(/^【[^】]*】\s*/, '')
+        .replace(/^amazon\.[a-z.]+\s*:\s*/i, '')
+        .trim();
+
+    const first =
+        text
+            .split(TITLE_BREAKS)
+            .map((part) => part.trim())
+            .find(Boolean) ?? '';
+    const cleaned = first.replace(TITLE_TAILS, '').trim();
+    const result = cleaned.length >= 3 ? cleaned : first;
+
+    return result ? result.slice(0, 120) : undefined;
+};
+
+const textOf = (pattern: RegExp, html: string) =>
+    cleanTitle(pattern.exec(html)?.[1]);
+
+const confirmedHeading = (html: string): string | undefined => {
+    const heading = textOf(/<h1\b[^>]*>([\s\S]{0,400}?)<\/h1>/i, html);
+    if (!heading || heading.length < 8) return undefined;
+
+    const titles = [
+        /<title\b[^>]*>([\s\S]*?)<\/title>/i.exec(html)?.[1],
+        ...readMetaTags(html)
+            .filter((tag) =>
+                ['og:title', 'twitter:title'].includes(
+                    (tag.property || tag.name || '').toLowerCase(),
+                ),
+            )
+            .map((tag) => tag.content),
+    ].map((value) =>
+        decodeEntities(value ?? '')
+            .replace(/\s+/g, ' ')
+            .trim()
+            .toLowerCase(),
+    );
+
+    return titles.some((title) => title.startsWith(heading.toLowerCase()))
+        ? heading
+        : undefined;
+};
+
 export const parsePageTitle = (html: string): string | undefined => {
-    const ogTitle = readMetaTags(html).find((tag) =>
-        ['og:title', 'twitter:title'].includes(
-            (tag.property || tag.name || '').toLowerCase(),
-        ),
-    )?.content;
+    const confirmed = confirmedHeading(html);
+    if (confirmed) return confirmed;
 
-    const title =
-        ogTitle ??
-        decodeEntities(
-            /<title\b[^>]*>([\s\S]*?)<\/title>/i.exec(html)?.[1] ?? '',
+    const productName = productNodes(html)
+        .map((node) =>
+            typeof node.name === 'string' ? cleanTitle(node.name) : undefined,
+        )
+        .find(Boolean);
+    if (productName) return productName;
+
+    const heading =
+        textOf(
+            /<[a-z0-9]+\b[^>]*id\s*=\s*["']productTitle["'][^>]*>([\s\S]{0,400}?)<\//i,
+            html,
+        ) ??
+        textOf(
+            /<h1\b[^>]*itemprop\s*=\s*["']name["'][^>]*>([\s\S]{0,400}?)<\/h1>/i,
+            html,
+        ) ??
+        textOf(
+            /<h1\b[^>]*(?:product[_-]?(?:name|title)|data-product-name)[^>]*>([\s\S]{0,400}?)<\/h1>/i,
+            html,
         );
+    if (heading) return heading;
 
-    const trimmed = title.replace(/\s+/g, ' ').trim();
+    const ogTitle = readMetaTags(html)
+        .filter((tag) =>
+            ['og:title', 'twitter:title'].includes(
+                (tag.property || tag.name || '').toLowerCase(),
+            ),
+        )
+        .map((tag) => cleanTitle(tag.content))
+        .find(Boolean);
 
-    return trimmed ? trimmed.slice(0, 120) : undefined;
+    return ogTitle ?? textOf(/<title\b[^>]*>([\s\S]*?)<\/title>/i, html);
 };
 
 const IMAGE_META_KEYS = [
@@ -325,6 +425,11 @@ export const parseProductImage = (
     html: string,
     pageUrl: string,
 ): string | undefined => {
+    for (const node of productNodes(html)) {
+        const url = toImageUrl(pickJsonLdImage(node.image), pageUrl);
+        if (url) return url;
+    }
+
     const tags = readMetaTags(html);
 
     for (const key of IMAGE_META_KEYS) {
