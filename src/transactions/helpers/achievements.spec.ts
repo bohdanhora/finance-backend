@@ -99,6 +99,66 @@ describe('achievements', () => {
         expect(find(list, 'debtfree')?.value).toBe(2);
     });
 
+    it('measures the habit awards from records and savings', () => {
+        const week = ['09', '10', '11', '12', '13', '14', '15'].map((day) => ({
+            date: `2026-11-${day}T12:00:00Z`,
+            transactionType: 'expense',
+            value: 10,
+            description: day === '09' ? 'coffee' : '',
+        }));
+        const list = buildAchievements(
+            source({
+                transactions: [
+                    {
+                        date: '2026-08-01T12:00:00Z',
+                        transactionType: 'income',
+                        value: 500,
+                    },
+                    {
+                        date: '2026-08-03T12:00:00Z',
+                        transactionType: 'expense',
+                        value: 300,
+                    },
+                    {
+                        date: '2026-09-03T12:00:00Z',
+                        transactionType: 'expense',
+                        value: 100,
+                    },
+                    {
+                        date: '2026-10-01T12:00:00Z',
+                        transactionType: 'income',
+                        value: 400,
+                    },
+                    {
+                        date: '2026-10-03T12:00:00Z',
+                        transactionType: 'expense',
+                        value: 200,
+                    },
+                    ...week,
+                ],
+                savings: [
+                    { type: 'deposit', date: '2026-08-02' },
+                    { type: 'deposit', date: '2026-09-20' },
+                    { type: 'withdrawal', date: '2026-09-25' },
+                    { type: 'deposit', date: '2026-10-09' },
+                ],
+                monthHistory: [
+                    { month: '2026-08', essentials: [{ checked: true }] },
+                    { month: '2026-10', essentials: [{ checked: false }] },
+                ],
+            }),
+        );
+
+        expect(find(list, 'payself')?.value).toBe(1);
+        expect(find(list, 'untouchable')?.value).toBe(54);
+        expect(find(list, 'perfectweek')?.value).toBe(1);
+        expect(find(list, 'perfectmonth')?.value).toBe(1);
+        expect(find(list, 'rhythm')?.value).toBe(3);
+        expect(find(list, 'thrifty')?.value).toBe(1);
+        expect(find(list, 'pedant')?.value).toBe(1);
+        expect(find(list, 'veteran')?.value).toBe(107);
+    });
+
     it('pays every reached tier once through the pet rewards', () => {
         const activity = {
             day: '2026-11-16',
